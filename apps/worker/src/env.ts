@@ -1,0 +1,25 @@
+import {
+  httpUrlSchema,
+  logLevelSchema,
+  nodeEnvSchema,
+  optionalEnv,
+  parseEnv,
+  redisUrlSchema,
+} from '@smsvio/shared';
+import { z } from 'zod';
+
+export const workerEnvSchema = z.object({
+  NODE_ENV: nodeEnvSchema,
+  LOG_LEVEL: logLevelSchema,
+  REDIS_URL: redisUrlSchema,
+  WORKER_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(1000).max(60_000).default(10_000),
+  SENTRY_DSN: optionalEnv(httpUrlSchema),
+  SENTRY_ENVIRONMENT: optionalEnv(z.string().min(1)),
+  APP_RELEASE: optionalEnv(z.string().min(1)),
+});
+
+export type WorkerEnv = z.output<typeof workerEnvSchema>;
+
+export function loadWorkerEnv(source: Readonly<Record<string, string | undefined>>): WorkerEnv {
+  return parseEnv(workerEnvSchema, source);
+}
