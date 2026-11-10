@@ -11,6 +11,7 @@ header {
 	Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
 	Cross-Origin-Opener-Policy "same-origin"
 	-Server
+	-Via
 	-X-Powered-By
 }
 

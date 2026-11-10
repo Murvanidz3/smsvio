@@ -3,6 +3,11 @@
 	auto_https off
 }
 
+http://127.0.0.1:8081 {
+	bind 127.0.0.1
+	respond "ok" 200
+}
+
 :8080 {
 	import /etc/caddy/routes.caddy
 }

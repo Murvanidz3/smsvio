@@ -93,6 +93,7 @@ services:
     tmpfs:
       - /tmp
     mem_limit: 512m
+    stop_grace_period: 30s
     healthcheck:
       test:
         - CMD
@@ -123,6 +124,7 @@ services:
     tmpfs:
       - /tmp
     mem_limit: 512m
+    stop_grace_period: 30s
     healthcheck:
       test: ['CMD', 'node', 'dist/healthcheck.js']
       interval: 15s
@@ -178,6 +180,11 @@ services:
     tmpfs:
       - /tmp
     mem_limit: 256m
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--output-document=/dev/null', 'http://127.0.0.1:8081/']
+      interval: 10s
+      timeout: 5s
+      retries: 6
     depends_on:
       api:
         condition: service_healthy

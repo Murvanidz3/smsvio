@@ -3,6 +3,11 @@
 	admin off
 }
 
+http://127.0.0.1:8081 {
+	bind 127.0.0.1
+	respond "ok" 200
+}
+
 www.{$SITE_DOMAIN} {
 	header -Server
 	redir https://{$SITE_DOMAIN}{uri} permanent

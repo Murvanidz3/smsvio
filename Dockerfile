@@ -13,7 +13,7 @@ RUN apt-get update \
 
 FROM base AS build
 ARG PNPM_VERSION=12.18.0
-RUN npm install --global "pnpm@${PNPM_VERSION}" && npm cache clean --force
+RUN npm install --global --allow-scripts=pnpm "pnpm@${PNPM_VERSION}" && npm cache clean --force
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm fetch

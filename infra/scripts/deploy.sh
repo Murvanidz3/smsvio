@@ -82,7 +82,7 @@ activate() {
     images_present "$tag" || return 1
     log "registry pull failed; using the images already on this host for ${tag}"
   fi
-  compose up --detach --remove-orphans --wait --wait-timeout 300
+  compose up --detach --remove-orphans --quiet-pull --wait --wait-timeout 300
 }
 
 prune_old_images() {
