@@ -1,0 +1,8 @@
+{
+  "extends": "@smsvio/config/tsconfig/nest.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": ["src", "test", "*.ts"]
+}
