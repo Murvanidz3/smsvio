@@ -2,11 +2,14 @@
   "name": "@smsvio/api",
   "version": "0.0.0",
   "private": true,
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "node --enable-source-maps --import ./dist/instrument.js dist/main.js",
-    "dev": "node --watch --env-file-if-exists=../../.env --enable-source-maps --import ./dist/instrument.js dist/main.js",
+    "dev": "tsc-watch -p tsconfig.build.json --noClear --onSuccess \"node --env-file-if-exists=../../.env --enable-source-maps --import ./dist/instrument.js dist/main.js\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run --coverage",
@@ -36,6 +39,7 @@
     "@vitest/coverage-v8": "^5.1.0",
     "eslint": "9.39.5",
     "supertest": "^7.3.2",
+    "tsc-watch": "^7.2.1",
     "typescript": "6.0.3",
     "unplugin-swc": "^2.0.0",
     "vitest": "^5.1.0"

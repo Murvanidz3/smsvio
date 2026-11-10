@@ -1,0 +1,12 @@
+{
+  "name": "@smsvio/migrate",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Runtime dependencies of the one-shot database migration container. The schema and migrations live in packages/db.",
+  "type": "module",
+  "files": [],
+  "dependencies": {
+    "dotenv": "^18.0.10",
+    "prisma": "7.10.1"
+  }
+}
