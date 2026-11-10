@@ -1,0 +1,25 @@
+{
+  "name": "smsvio",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=26.13.0 <27"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint && prettier --check .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration --concurrency=1",
+    "test:e2e": "turbo run test:e2e",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@smsvio/config": "workspace:*",
+    "prettier": "^3.9.10",
+    "turbo": "^2.11.10",
+    "typescript": "6.0.3"
+  }
+}
