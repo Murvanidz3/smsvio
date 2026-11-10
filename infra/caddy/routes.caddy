@@ -1,0 +1,24 @@
+encode zstd gzip
+
+request_body {
+	max_size 2MB
+}
+
+header {
+	X-Content-Type-Options "nosniff"
+	X-Frame-Options "DENY"
+	Referrer-Policy "strict-origin-when-cross-origin"
+	Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+	Cross-Origin-Opener-Policy "same-origin"
+	-Server
+	-X-Powered-By
+}
+
+@api path /api /api/* /healthz /readyz
+handle @api {
+	reverse_proxy api:4000
+}
+
+handle {
+	reverse_proxy web:3000
+}

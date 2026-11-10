@@ -1,0 +1,14 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+
+www.{$SITE_DOMAIN} {
+	header -Server
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}
+
+{$SITE_DOMAIN} {
+	header Strict-Transport-Security "max-age=31536000"
+	import /etc/caddy/routes.caddy
+}
