@@ -52,6 +52,15 @@ describe('requestLogLevel', () => {
   ] as const)('status %i with error %s -> %s', (status, error, level) => {
     expect(requestLogLevel(status, error)).toBe(level);
   });
+
+  it.each([
+    [200, undefined, 'silent'],
+    [404, undefined, 'warn'],
+    [503, undefined, 'error'],
+    [200, new Error('boom'), 'error'],
+  ] as const)('quiet path with status %i and error %s -> %s', (status, error, level) => {
+    expect(requestLogLevel(status, error, true)).toBe(level);
+  });
 });
 
 describe('pinoHttpOptions', () => {
@@ -65,10 +74,13 @@ describe('pinoHttpOptions', () => {
     expect(options.base).toEqual({ service: 'api' });
   });
 
-  it('skips automatic logs only for quiet paths', () => {
-    expect(options.autoLogging.ignore(request('/healthz'))).toBe(true);
-    expect(options.autoLogging.ignore(request('/healthz?probe=1'))).toBe(true);
-    expect(options.autoLogging.ignore(request('/readyz'))).toBe(false);
+  it('silences only successful requests to quiet paths', () => {
+    const ok = { statusCode: 200 } as ServerResponse;
+    const failed = { statusCode: 503 } as ServerResponse;
+    expect(options.customLogLevel(request('/healthz'), ok)).toBe('silent');
+    expect(options.customLogLevel(request('/healthz?probe=1'), ok)).toBe('silent');
+    expect(options.customLogLevel(request('/healthz'), failed)).toBe('error');
+    expect(options.customLogLevel(request('/readyz'), ok)).toBe('info');
   });
 
   it('serialises requests without query strings or headers', () => {
@@ -89,7 +101,9 @@ describe('pinoHttpOptions', () => {
 
   it('logs every path when no quiet paths are configured', () => {
     const noisy = pinoHttpOptions({ service: 'worker', level: 'debug' });
-    expect(noisy.autoLogging.ignore(request('/healthz'))).toBe(false);
+    expect(noisy.customLogLevel(request('/healthz'), { statusCode: 200 } as ServerResponse)).toBe(
+      'info',
+    );
   });
 });
 

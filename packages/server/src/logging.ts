@@ -37,11 +37,18 @@ export function stripQuery(url: string | undefined): string {
   return index === -1 ? url : url.slice(0, index);
 }
 
-export function requestLogLevel(statusCode: number, error: Error | undefined): LevelWithSilent {
+export function requestLogLevel(
+  statusCode: number,
+  error: Error | undefined,
+  quiet = false,
+): LevelWithSilent {
   if (error !== undefined || statusCode >= 500) {
     return 'error';
   }
-  return statusCode >= 400 ? 'warn' : 'info';
+  if (statusCode >= 400) {
+    return 'warn';
+  }
+  return quiet ? 'silent' : 'info';
 }
 
 export interface LoggingOptions {
@@ -60,9 +67,10 @@ export function pinoHttpOptions(options: LoggingOptions) {
     base: { service: options.service },
     timestamp: stdTimeFunctions.isoTime,
     redact: { paths: [...LOG_REDACT_PATHS], censor: '[redacted]' },
-    autoLogging: { ignore: (req: IncomingMessage) => quietPaths.has(stripQuery(req.url)) },
-    customLogLevel: (_req: IncomingMessage, res: ServerResponse, error?: Error) =>
-      requestLogLevel(res.statusCode, error),
+    // Decided at response time: Fastify's middleware layer rewrites `req.url` while the request
+    // is in flight, so pino-http's start-of-request `autoLogging.ignore` misses quiet paths.
+    customLogLevel: (req: IncomingMessage, res: ServerResponse, error?: Error) =>
+      requestLogLevel(res.statusCode, error, quietPaths.has(stripQuery(req.url))),
     serializers: {
       req: (req: RequestWithId) => ({
         id: req.id,
