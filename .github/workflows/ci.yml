@@ -1,0 +1,252 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  CHECKPOINT_DISABLE: '1'
+  PRISMA_HIDE_UPDATE_MESSAGE: '1'
+  NEXT_TELEMETRY_DISABLED: '1'
+  TURBO_TELEMETRY_DISABLED: '1'
+  PUBLIC_URL: https://smsvio.com
+
+jobs:
+  verify:
+    name: Lint, typecheck, unit tests, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit tests with coverage thresholds
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+
+      - name: Check shell scripts
+        run: shellcheck -x infra/scripts/*.sh
+      - name: Validate the production compose file
+        env:
+          APP_RELEASE: ci
+          IMAGE_PREFIX: ghcr.io/murvanidz3/smsvio
+          POSTGRES_PASSWORD: ci
+          REDIS_PASSWORD: ci
+          SITE_DOMAIN: example.com
+          ACME_EMAIL: ops@example.com
+        run: docker compose -f infra/docker-compose.prod.yml config --quiet
+
+  integration:
+    name: Integration tests (Postgres, Redis)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18.6-trixie
+        env:
+          POSTGRES_DB: smsvio
+          POSTGRES_USER: smsvio
+          POSTGRES_PASSWORD: smsvio
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U smsvio -d smsvio"
+          --health-interval 3s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:8.10.3-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://smsvio:smsvio@localhost:5432/smsvio
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+
+      - name: Apply migrations
+        run: pnpm --filter @smsvio/db migrate:deploy
+      - name: Integration tests
+        run: pnpm test:integration
+
+  e2e:
+    name: Playwright (light and dark, desktop and mobile)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+
+      - name: Install Chromium
+        run: pnpm --filter @smsvio/web exec playwright install --with-deps chromium
+      - name: End-to-end tests
+        run: pnpm test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+
+  compose-smoke:
+    name: Fresh clone runs with docker compose
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start the stack from .env.example
+        run: |
+          cp .env.example .env
+          docker compose up --detach --build --quiet-pull --wait --wait-timeout 600
+      - name: Check the stack through the local reverse proxy
+        run: |
+          for path in /healthz /readyz / /signin; do
+            curl --fail --silent --show-error --max-time 15 --output /dev/null "http://localhost:8080${path}"
+            echo "ok ${path}"
+          done
+          curl --fail --silent --show-error http://localhost:8080/readyz | jq -e '.status == "ok"'
+      - name: Show service logs
+        if: failure()
+        run: docker compose ps --all && docker compose logs --no-color --tail 100
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
+  images:
+    name: Build and push images
+    needs: [verify, integration, e2e, compose-smoke]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/bake-action@v7
+        env:
+          RELEASE: ${{ github.sha }}
+        with:
+          source: .
+          files: docker-bake.hcl
+          push: true
+          set: |
+            api.cache-from=type=gha,scope=api
+            api.cache-to=type=gha,mode=max,scope=api
+            worker.cache-from=type=gha,scope=worker
+            worker.cache-to=type=gha,mode=max,scope=worker
+            web.cache-from=type=gha,scope=web
+            web.cache-to=type=gha,mode=max,scope=web
+            migrate.cache-from=type=gha,scope=migrate
+            migrate.cache-to=type=gha,mode=max,scope=migrate
+            caddy.cache-from=type=gha,scope=caddy
+            caddy.cache-to=type=gha,mode=max,scope=caddy
+
+  deploy:
+    name: Deploy to production
+    needs: [images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: ${{ env.PUBLIC_URL }}
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    env:
+      RELEASE: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_USER: ${{ secrets.VPS_SSH_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+        run: |
+          for name in VPS_HOST VPS_SSH_USER VPS_SSH_KEY VPS_SSH_KNOWN_HOSTS; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Repository secret ${name} is not set (see docs/DEPLOY.md)."
+              exit 1
+            fi
+          done
+          install -m 0700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" >~/.ssh/deploy_key
+          chmod 0600 ~/.ssh/deploy_key
+          printf '%s\n' "$VPS_SSH_KNOWN_HOSTS" >~/.ssh/known_hosts
+          cat >~/.ssh/config <<EOF
+          Host vps
+            HostName ${VPS_HOST}
+            User ${VPS_SSH_USER}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ServerAliveInterval 15
+          EOF
+
+      - name: Upload release files
+        run: |
+          ssh vps 'mkdir -p /opt/smsvio/scripts'
+          scp infra/docker-compose.prod.yml vps:/opt/smsvio/docker-compose.prod.yml
+          scp infra/scripts/deploy.sh infra/scripts/compose.sh infra/scripts/rollback.sh vps:/opt/smsvio/scripts/
+          ssh vps 'chmod 0755 /opt/smsvio/scripts/*.sh'
+
+      - name: Log the server in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | ssh vps "docker login ghcr.io --username ${GITHUB_ACTOR} --password-stdin"
+
+      - name: Deploy release
+        run: ssh vps "/opt/smsvio/scripts/deploy.sh ${RELEASE}"
+
+      - name: Log the server out of GHCR
+        if: always()
+        run: ssh vps 'docker logout ghcr.io' || true
+
+      - name: Verify from the internet
+        id: verify
+        run: |
+          for path in /readyz / /signin; do
+            curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors \
+              --max-time 15 --output /dev/null "${PUBLIC_URL}${path}"
+            echo "ok ${PUBLIC_URL}${path}"
+          done
+          curl --fail --silent --show-error "${PUBLIC_URL}/readyz" | jq -e '.status == "ok"'
+          www_host="www.${PUBLIC_URL#https://}"
+          location="$(curl --silent --output /dev/null --max-time 15 --write-out '%{redirect_url}' "https://${www_host}/" || true)"
+          if [[ "$location" == "${PUBLIC_URL}/" ]]; then
+            echo "ok https://${www_host}/ redirects to ${location}"
+          else
+            echo "::warning::https://${www_host}/ does not redirect to ${PUBLIC_URL}/ yet (check the www DNS record)."
+          fi
+
+      - name: Roll back when the public check fails
+        if: failure() && steps.verify.outcome == 'failure'
+        run: ssh vps '/opt/smsvio/scripts/rollback.sh'
