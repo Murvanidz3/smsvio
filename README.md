@@ -8,7 +8,7 @@ The build follows the phases in [`docs/SPEC.md`](docs/SPEC.md). **Phase 3 part A
 routes, rates, senders, and balances)** is in place. Operators set a markup on each provider,
 see the resulting customer price, import manual rates, and credit a balance. Customers enable
 countries and request a sender. The send pipeline, the Send screen, and the Messages screen are
-part B and are not built yet. Part A is the live release `772d127`; the record is
+part B and are not built yet. Part A is the live release `86d0846`; the record is
 [`docs/reports/phase-3a.md`](docs/reports/phase-3a.md). Phase 2 (contacts, templates, and number
 lookup), Phase 1
 (accounts), and Phase 0 (foundation and production hosting) remain underneath it.

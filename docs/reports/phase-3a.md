@@ -42,16 +42,17 @@ Compose smoke test run in GitHub Actions.
 
 Playwright signs in as the demo owner, enables one country per project, credits 1.00 USD with a
 reason, and checks the seeded mock route: 50% from the provider, source `computed`, price
-`0.0150`. The integration test checks that another organization's sender and country return 404.
+`0.0150`. Mobile projects tap **Enable country** and **Apply** with a normal click, with no
+`force` option. Enter is covered once, on the desktop light project, for Italy. The integration
+test checks that another organization's sender and country return 404.
 
-[CI run 43100096279](https://github.com/Murvanidz3/smsvio/actions/runs/43100096279) (run 22) on
-`772d127f581fbc53316a868928d9d6e12ac4882e` passed lint, unit tests, integration tests,
-Playwright, the Compose smoke test, the image build, and **Deploy to production**. That job
-ran; it was not skipped. The deploy log records
-`release 772d127f581fbc53316a868928d9d6e12ac4882e is live on https://smsvio.com`, and the job's
-public check got `ok` for `/readyz`, `/`, and `/signin`. A direct request to
+[CI run 43114439327](https://github.com/Murvanidz3/smsvio/actions/runs/43114439327) on
+`86d084612cfa4c869aa57f25bf1d22b42cf13d35` passed lint, unit tests, integration tests,
+Playwright (including the mobile taps), the Compose smoke test, the image build, and **Deploy
+to production**. That job ran; it was not skipped. A direct request to
 `https://smsvio.com/readyz` returned HTTP 200 with `"status": "ok"` for Postgres and Redis.
-That commit is the live release.
+`/opt/smsvio/.release.env` reads `86d084612cfa4c869aa57f25bf1d22b42cf13d35`. That commit is the
+live release. Run 22 on `772d127` was the previous production deploy and also passed every job.
 
 No test file was deleted between `850d3eb` and `772d127`. Nothing was skipped or marked fixme.
 The worker heartbeat expectations count one extra Redis write because the nightly sweep takes
@@ -79,13 +80,16 @@ Recorded in `docs/DECISIONS.md` under Phase 3a.
 - The customer rate table and the pricing calculator page are Phase 5. The price function and the
   Senders country dialog already show the current price.
 - Playwright, the Postgres integration tests, and the Compose smoke test were not run on this
-  machine. They passed in GitHub Actions on `772d127`.
+  machine. They passed in GitHub Actions on `86d0846`.
 
 Runs 19 (`43097731944`, `2480775`) and 20 (`43098371624`, `e6e1bb3`) are still listed as queued
-and have no jobs. Cancel and force-cancel return HTTP 409, "Cannot cancel a workflow run that
-has not been queued yet." The signed-in Cancel workflow button returns "Failed to cancel
-workflow." They are not deploying. If GitHub later creates their jobs, those commits could
-deploy over `772d127`.
+and have no jobs. Cancel and force-cancel return HTTP 409. A later delete of both runs returned
+HTTP 403, "Could not delete the workflow run." They were left in place. They cannot deploy an
+older commit: the GitHub Actions key can only run `/usr/local/sbin/smsvio-ssh-guard`. Deploying
+`24807751ec9e2f692ddcec48ada96048120241f9` through that key was refused with
+`24807751ec9e2f692ddcec48ada96048120241f9 is behind the live release`, and the live release did
+not change. An explicit `--rollback` is required to deploy an older sha. The admin key is
+unchanged and can still open a shell. Details are in `docs/DEPLOY.md`.
 
 ## What Part B needs to know
 
