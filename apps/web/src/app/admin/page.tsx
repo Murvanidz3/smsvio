@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { PageSize, Pager, showing } from '@/components/catalog/table-tools';
@@ -249,21 +249,47 @@ function AdjustDialog({
     reason: string;
   }) => Promise<void>;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [direction, setDirection] = useState<'credit' | 'debit'>('credit');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const node = dialogRef.current;
+    if (!node) return;
+    node.showModal();
+    const html = document.documentElement;
+    const body = document.body;
+    const scrollY = window.scrollY;
+    const previous = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyWidth: body.style.width,
+    };
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.top = `-${String(scrollY)}px`;
+    body.style.width = '100%';
     return () => {
-      document.body.style.overflow = previous;
+      node.close();
+      html.style.overflow = previous.htmlOverflow;
+      body.style.overflow = previous.bodyOverflow;
+      body.style.position = previous.bodyPosition;
+      body.style.top = previous.bodyTop;
+      body.style.width = previous.bodyWidth;
+      window.scrollTo(0, scrollY);
     };
   }, []);
   return createPortal(
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-hidden bg-black/40 px-4">
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="adjust-title"
+      className="bg-popover m-auto w-[min(100%-2rem,28rem)] max-w-md rounded-xl border p-5 backdrop:bg-black/40"
+      style={{ overflow: 'visible' }}
+    >
       <form
-        className="bg-popover w-full max-w-md rounded-xl border p-5"
-        role="dialog"
         aria-labelledby="adjust-title"
         onSubmit={(event) => {
           event.preventDefault();
@@ -311,16 +337,20 @@ function AdjustDialog({
             required
           />
         </label>
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 grid gap-2">
+          <Button
+            type="submit"
+            style={{ height: '3rem', width: '100%', pointerEvents: 'auto' }}
+            disabled={busy}
+          >
+            Apply
+          </Button>
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="submit" style={{ pointerEvents: 'auto' }} disabled={busy}>
-            Apply
-          </Button>
         </div>
       </form>
-    </div>,
+    </dialog>,
     document.body,
   );
 }

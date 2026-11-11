@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { ConfirmDialog } from '@/components/catalog/confirm';
@@ -377,72 +377,94 @@ function AddCountryDialog({
   onCancel: () => void;
   onEnable: () => void;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const node = dialogRef.current;
+    if (!node) return;
+    node.showModal();
+    const html = document.documentElement;
+    const body = document.body;
+    const scrollY = window.scrollY;
+    const previous = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyWidth: body.style.width,
+    };
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.top = `-${String(scrollY)}px`;
+    body.style.width = '100%';
     return () => {
-      document.body.style.overflow = previous;
+      node.close();
+      html.style.overflow = previous.htmlOverflow;
+      body.style.overflow = previous.bodyOverflow;
+      body.style.position = previous.bodyPosition;
+      body.style.top = previous.bodyTop;
+      body.style.width = previous.bodyWidth;
+      window.scrollTo(0, scrollY);
     };
   }, []);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-hidden bg-black/40 px-4">
-      <div
-        className="bg-popover w-full max-w-md rounded-xl border p-5"
-        role="dialog"
-        aria-labelledby="add-country-title"
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="add-country-title"
+      className="bg-popover m-auto w-[min(100%-2rem,28rem)] max-w-md rounded-xl border p-5 backdrop:bg-black/40"
+      style={{ overflow: 'visible' }}
+    >
+      <h2 id="add-country-title" className="text-lg font-semibold">
+        Add a country
+      </h2>
+      <label className="mt-4 grid gap-1 text-sm">
+        Country
+        <input
+          className={field}
+          value={countryQuery}
+          onChange={(event) => {
+            onQuery(event.target.value);
+          }}
+        />
+      </label>
+      <ul
+        className="mt-2 grid max-h-24 gap-1 overflow-y-auto overscroll-contain"
+        role="listbox"
+        aria-label="Matching countries"
       >
-        <h2 id="add-country-title" className="text-lg font-semibold">
-          Add a country
-        </h2>
-        <label className="mt-4 grid gap-1 text-sm">
-          Country
-          <input
-            className={field}
-            value={countryQuery}
-            onChange={(event) => {
-              onQuery(event.target.value);
-            }}
-          />
-        </label>
-        <ul
-          className="mt-2 grid max-h-24 gap-1 overflow-y-auto overscroll-contain"
-          role="listbox"
-          aria-label="Matching countries"
+        {countryMatches.map((row) => (
+          <li key={row.iso2}>
+            <button
+              type="button"
+              role="option"
+              aria-selected={country === row.iso2}
+              className="hover:bg-muted w-full rounded-lg px-3 py-2 text-left text-sm"
+              onClick={() => {
+                onPick(row.iso2, row.name);
+              }}
+            >
+              {row.name} +{row.dialCode}
+              {row.price === null ? '' : ` · ${row.price.display} USD`}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="text-muted-foreground mt-3 text-sm">
+        New countries use the shared platform number until you have an approved sender.
+      </p>
+      <div className="mt-5 grid gap-2">
+        <Button
+          type="button"
+          style={{ height: '3rem', width: '100%', pointerEvents: 'auto' }}
+          disabled={busy || country === ''}
+          onClick={onEnable}
         >
-          {countryMatches.map((row) => (
-            <li key={row.iso2}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={country === row.iso2}
-                className="hover:bg-muted w-full rounded-lg px-3 py-2 text-left text-sm"
-                onClick={() => {
-                  onPick(row.iso2, row.name);
-                }}
-              >
-                {row.name} +{row.dialCode}
-                {row.price === null ? '' : ` · ${row.price.display} USD`}
-              </button>
-            </li>
-          ))}
-        </ul>
-        <p className="text-muted-foreground mt-3 text-sm">
-          New countries use the shared platform number until you have an approved sender.
-        </p>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            style={{ pointerEvents: 'auto' }}
-            disabled={busy || country === ''}
-            onClick={onEnable}
-          >
-            Enable country
-          </Button>
-        </div>
+          Enable country
+        </Button>
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
       </div>
-    </div>
+    </dialog>
   );
 }
