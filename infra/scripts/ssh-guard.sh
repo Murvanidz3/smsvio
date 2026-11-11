@@ -16,6 +16,8 @@ die() { log "refusing: $*"; exit 1; }
 
 cmd="${SSH_ORIGINAL_COMMAND:-}"
 [[ -n "$cmd" ]] || die "no command"
+# The characters are literal; the command is never evaluated.
+# shellcheck disable=SC2016
 if [[ "$cmd" =~ [';&|<>`$()'] ]] || [[ "$cmd" == *$'\n'* ]] || [[ "$cmd" == *$'\r'* ]]; then
   die "command shape"
 fi
