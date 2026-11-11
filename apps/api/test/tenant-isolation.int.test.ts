@@ -117,7 +117,7 @@ describe('tenant isolation against Postgres', () => {
       .send({ role: 'ADMIN' })
       .expect(404);
 
-    const adaStill = await ada.agent.get('/api/internal/session').expect(200);
+    const adaStill = await ada.agent.get('/api/internal/auth/session').expect(200);
     expect(record(record(adaStill.body).organization).id).toBe(ada.organizationId);
 
     await ada.agent

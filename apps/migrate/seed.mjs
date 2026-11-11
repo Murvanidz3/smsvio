@@ -1,10 +1,20 @@
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
+const here = dirname(fileURLToPath(import.meta.url));
+const monorepoDb = join(here, '../../packages/db');
+const prismaCwd = existsSync(join(process.cwd(), 'prisma.config.ts'))
+  ? process.cwd()
+  : existsSync(join(monorepoDb, 'prisma.config.ts'))
+    ? monorepoDb
+    : process.cwd();
 const prismaEntry = join(dirname(require.resolve('prisma/package.json')), 'build/index.js');
 const migrated = spawnSync(process.execPath, [prismaEntry, 'migrate', 'deploy'], {
+  cwd: prismaCwd,
   stdio: 'inherit',
 });
 if (migrated.status !== 0) {
