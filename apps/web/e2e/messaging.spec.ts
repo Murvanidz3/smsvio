@@ -38,7 +38,10 @@ test.describe('senders and admin pricing', () => {
       const dialog = page.getByRole('dialog', { name: 'Add a country' });
       await dialog.getByLabel('Country').fill(destination.name);
       await dialog.getByRole('option', { name: destination.name }).click();
-      await dialog.getByRole('button', { name: 'Enable country' }).click();
+      const enable = dialog.getByRole('button', { name: 'Enable country' });
+      await expect(enable).toBeEnabled();
+      await enable.focus();
+      await page.keyboard.press('Enter');
     }
     await expect(countryCell).toBeVisible();
 
@@ -48,7 +51,9 @@ test.describe('senders and admin pricing', () => {
     const adjust = page.getByRole('dialog', { name: /Adjust / });
     await adjust.getByLabel('Amount').fill('1.00');
     await adjust.getByLabel('Reason').fill('Phase 3 balance check');
-    await adjust.getByRole('button', { name: 'Apply' }).click();
+    const apply = adjust.getByRole('button', { name: 'Apply' });
+    await apply.focus();
+    await page.keyboard.press('Enter');
     await expect(page.getByRole('status').filter({ hasText: 'Credited 1.00 USD.' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Providers', exact: true }).click();

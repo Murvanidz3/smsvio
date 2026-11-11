@@ -120,7 +120,7 @@ export default function AdminOrganizationsPage() {
               <th className="px-3 py-2 font-medium">Available</th>
               <th className="px-3 py-2 font-medium">Held</th>
               <th className="px-3 py-2 font-medium">Daily cap</th>
-              <th className="px-3 py-2 font-medium">
+              <th className="bg-muted sticky right-0 px-3 py-2 font-medium">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
@@ -146,7 +146,7 @@ export default function AdminOrganizationsPage() {
                     {organization.spendCap.display}{' '}
                     <span className="text-muted-foreground">({organization.spendCapSource})</span>
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="bg-background sticky right-0 z-10 px-3 py-2">
                     <div className="flex justify-end gap-2">
                       <Button
                         type="button"
