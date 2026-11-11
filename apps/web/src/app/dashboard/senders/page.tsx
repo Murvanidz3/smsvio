@@ -21,11 +21,21 @@ export default function SendersPage() {
   const [adding, setAdding] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [country, setCountry] = useState('');
+  const [countryQuery, setCountryQuery] = useState('');
   const [remove, setRemove] = useState<SenderDestination | null>(null);
   const [busy, setBusy] = useState(false);
   const destinations = overview.data?.destinations ?? [];
   const enabled = destinations.filter((row) => row.enabled);
   const available = destinations.filter((row) => !row.enabled);
+  const needle = countryQuery.trim().toLowerCase();
+  const countryMatches = available
+    .filter(
+      (row) =>
+        needle === '' ||
+        row.name.toLowerCase().includes(needle) ||
+        row.iso2.toLowerCase().includes(needle),
+    )
+    .slice(0, 8);
 
   async function addCountry() {
     setBusy(true);
@@ -34,6 +44,7 @@ export default function SendersPage() {
       toast(result.message);
       setAdding(false);
       setCountry('');
+      setCountryQuery('');
       await queryClient.invalidateQueries({ queryKey: ['senders'] });
     } catch (error) {
       toast(error instanceof ApiError ? error.message : 'Could not enable that country.');
@@ -189,22 +200,34 @@ export default function SendersPage() {
             </h2>
             <label className="mt-4 grid gap-1 text-sm">
               Country
-              <select
+              <input
                 className={field}
-                value={country}
+                value={countryQuery}
                 onChange={(event) => {
-                  setCountry(event.target.value);
+                  setCountryQuery(event.target.value);
+                  setCountry('');
                 }}
-              >
-                <option value="">Choose a country</option>
-                {available.map((row) => (
-                  <option key={row.iso2} value={row.iso2}>
-                    {row.name} +{row.dialCode}{' '}
-                    {row.price === null ? '' : `· ${row.price.display} USD`}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
+            <ul className="mt-2 grid gap-1" role="listbox" aria-label="Matching countries">
+              {countryMatches.map((row) => (
+                <li key={row.iso2}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={country === row.iso2}
+                    className="hover:bg-muted w-full rounded-lg px-3 py-2 text-left text-sm"
+                    onClick={() => {
+                      setCountry(row.iso2);
+                      setCountryQuery(row.name);
+                    }}
+                  >
+                    {row.name} +{row.dialCode}
+                    {row.price === null ? '' : ` · ${row.price.display} USD`}
+                  </button>
+                </li>
+              ))}
+            </ul>
             <p className="text-muted-foreground mt-3 text-sm">
               New countries use the shared platform number until you have an approved sender.
             </p>

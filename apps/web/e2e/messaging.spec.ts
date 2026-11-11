@@ -35,7 +35,8 @@ test.describe('senders and admin pricing', () => {
     if ((await countryCell.count()) === 0) {
       await page.getByRole('button', { name: 'Add country' }).click();
       const dialog = page.getByRole('dialog', { name: 'Add a country' });
-      await dialog.getByLabel('Country').selectOption(destination.iso);
+      await dialog.getByLabel('Country').fill(destination.name);
+      await dialog.getByRole('option', { name: destination.name }).click();
       await dialog.getByRole('button', { name: 'Enable country' }).click();
     }
     await expect(countryCell).toBeVisible();
