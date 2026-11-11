@@ -1,7 +1,8 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { PageSize, Pager, showing } from '@/components/catalog/table-tools';
 import { useToast } from '@/components/toast';
@@ -251,11 +252,17 @@ function AdjustDialog({
   const [direction, setDirection] = useState<'credit' | 'debit'>('credit');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center px-4">
-      <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+  return createPortal(
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-hidden bg-black/40 px-4">
       <form
-        className="bg-popover relative z-10 w-full max-w-md rounded-xl border p-5"
+        className="bg-popover w-full max-w-md rounded-xl border p-5"
         role="dialog"
         aria-labelledby="adjust-title"
         onSubmit={(event) => {
@@ -294,7 +301,7 @@ function AdjustDialog({
         <label className="mt-3 grid gap-1 text-sm">
           Reason
           <textarea
-            className="border-input bg-background min-h-20 w-full rounded-lg border px-3 py-2 text-sm"
+            className="border-input bg-background min-h-16 w-full rounded-lg border px-3 py-2 text-sm"
             value={reason}
             minLength={3}
             maxLength={500}
@@ -304,16 +311,17 @@ function AdjustDialog({
             required
           />
         </label>
-        <div className="relative z-10 mt-5 flex shrink-0 justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" style={{ pointerEvents: 'auto' }} disabled={busy}>
             Apply
           </Button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

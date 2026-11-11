@@ -1,7 +1,8 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { ConfirmDialog } from '@/components/catalog/confirm';
 import { flag } from '@/components/catalog/table-tools';
@@ -188,75 +189,29 @@ export default function SendersPage() {
           </tbody>
         </table>
       </div>
-      {adding ? (
-        <div className="fixed inset-0 z-50 grid place-items-center px-4">
-          <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
-          <div
-            className="bg-popover relative z-10 w-full max-w-md rounded-xl border p-5"
-            role="dialog"
-            aria-labelledby="add-country-title"
-          >
-            <h2 id="add-country-title" className="text-lg font-semibold">
-              Add a country
-            </h2>
-            <label className="mt-4 grid gap-1 text-sm">
-              Country
-              <input
-                className={field}
-                value={countryQuery}
-                onChange={(event) => {
-                  setCountryQuery(event.target.value);
-                  setCountry('');
-                }}
-              />
-            </label>
-            <ul
-              className="mt-2 grid max-h-[min(10rem,28dvh)] gap-1 overflow-y-auto"
-              role="listbox"
-              aria-label="Matching countries"
-            >
-              {countryMatches.map((row) => (
-                <li key={row.iso2}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={country === row.iso2}
-                    className="hover:bg-muted w-full rounded-lg px-3 py-2 text-left text-sm"
-                    onClick={() => {
-                      setCountry(row.iso2);
-                      setCountryQuery(row.name);
-                    }}
-                  >
-                    {row.name} +{row.dialCode}
-                    {row.price === null ? '' : ` · ${row.price.display} USD`}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <p className="text-muted-foreground mt-3 text-sm">
-              New countries use the shared platform number until you have an approved sender.
-            </p>
-            <div className="relative z-10 mt-5 flex shrink-0 justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setAdding(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                disabled={busy || country === ''}
-                onClick={() => void addCountry()}
-              >
-                Enable country
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {adding
+        ? createPortal(
+            <AddCountryDialog
+              country={country}
+              countryQuery={countryQuery}
+              countryMatches={countryMatches}
+              busy={busy}
+              onQuery={(value) => {
+                setCountryQuery(value);
+                setCountry('');
+              }}
+              onPick={(iso2, name) => {
+                setCountry(iso2);
+                setCountryQuery(name);
+              }}
+              onCancel={() => {
+                setAdding(false);
+              }}
+              onEnable={() => void addCountry()}
+            />,
+            document.body,
+          )
+        : null}
       {requesting ? (
         <RequestSender
           countries={enabled}
@@ -399,6 +354,95 @@ function RequestSender({
           </Button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function AddCountryDialog({
+  country,
+  countryQuery,
+  countryMatches,
+  busy,
+  onQuery,
+  onPick,
+  onCancel,
+  onEnable,
+}: {
+  country: string;
+  countryQuery: string;
+  countryMatches: SenderDestination[];
+  busy: boolean;
+  onQuery: (value: string) => void;
+  onPick: (iso2: string, name: string) => void;
+  onCancel: () => void;
+  onEnable: () => void;
+}) {
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-hidden bg-black/40 px-4">
+      <div
+        className="bg-popover w-full max-w-md rounded-xl border p-5"
+        role="dialog"
+        aria-labelledby="add-country-title"
+      >
+        <h2 id="add-country-title" className="text-lg font-semibold">
+          Add a country
+        </h2>
+        <label className="mt-4 grid gap-1 text-sm">
+          Country
+          <input
+            className={field}
+            value={countryQuery}
+            onChange={(event) => {
+              onQuery(event.target.value);
+            }}
+          />
+        </label>
+        <ul
+          className="mt-2 grid max-h-24 gap-1 overflow-y-auto overscroll-contain"
+          role="listbox"
+          aria-label="Matching countries"
+        >
+          {countryMatches.map((row) => (
+            <li key={row.iso2}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={country === row.iso2}
+                className="hover:bg-muted w-full rounded-lg px-3 py-2 text-left text-sm"
+                onClick={() => {
+                  onPick(row.iso2, row.name);
+                }}
+              >
+                {row.name} +{row.dialCode}
+                {row.price === null ? '' : ` · ${row.price.display} USD`}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p className="text-muted-foreground mt-3 text-sm">
+          New countries use the shared platform number until you have an approved sender.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            style={{ pointerEvents: 'auto' }}
+            disabled={busy || country === ''}
+            onClick={onEnable}
+          >
+            Enable country
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
