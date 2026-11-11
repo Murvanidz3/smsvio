@@ -332,3 +332,7 @@ to `main` and must pass there. The deploy job does not start unless all three su
   registration; completing it is Phase 6. Real phone verification stays deferred.
 - `Message.providerId` and `Message.routeId` now reference Provider and Route and are set null if
   that row is removed. `apiKeyId` still has no foreign key.
+- Part A is in production at `772d127` ([CI run 43100096279](https://github.com/Murvanidz3/smsvio/actions/runs/43100096279)).
+  `https://smsvio.com/readyz` returned ok after that deploy. Part B has not started.
+  `AUTO_APPROVE_TEMPLATES` was not changed. A trial concurrency group of one run per commit was
+  reverted, so pushes to a branch still share one CI group.
