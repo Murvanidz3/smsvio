@@ -78,9 +78,13 @@ services:
       TRUST_PROXY_HOPS: '1'
       PUBLIC_ORIGIN: http://localhost:${HTTP_PORT:-8080}
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?Copy .env.example to .env first}
-      SMTP_HOST: mailpit
-      SMTP_PORT: '1025'
-      SMTP_FROM: ${SMTP_FROM:?Copy .env.example to .env first}
+      EMAIL_MODE: ${EMAIL_MODE:-disabled}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM: ${SMTP_FROM:-}
     healthcheck:
       test:
         - CMD

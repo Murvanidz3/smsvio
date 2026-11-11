@@ -1,9 +1,11 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { type SubmitEvent, useState } from 'react';
 
 import { AuthCard, fieldError, FormError, TextField } from '@/components/auth/fields';
+import { GoogleButton } from '@/components/auth/google-button';
 import { Button } from '@/components/ui/button';
 import { accountApi } from '@/lib/api';
 
@@ -15,6 +17,7 @@ export function SignUpForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [pending, setPending] = useState(false);
+  const config = useQuery({ queryKey: ['auth-config'], queryFn: () => accountApi.config() });
 
   async function onSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,8 +33,24 @@ export function SignUpForm() {
     }
   }
 
+  if (config.data?.emailMode === 'disabled') {
+    return (
+      <AuthCard title="Create your account">
+        {config.data.google ? <GoogleButton /> : null}
+        <p className="text-muted-foreground text-sm">Email registration is coming soon.</p>
+        <p className="text-muted-foreground text-sm">
+          Already have an account?{' '}
+          <Link className="text-primary underline-offset-4 hover:underline" href="/signin">
+            Sign in
+          </Link>
+        </p>
+      </AuthCard>
+    );
+  }
+
   return (
     <AuthCard title="Create your account">
+      {config.data?.google === true ? <GoogleButton /> : null}
       {message === null ? (
         <form className="grid gap-4" onSubmit={(event) => void onSubmit(event)}>
           <TextField

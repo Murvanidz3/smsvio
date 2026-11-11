@@ -5,7 +5,8 @@ import { Prisma } from '@smsvio/db';
 interface UserRow {
   id: string;
   email: string;
-  passwordHash: string;
+  passwordHash: string | null;
+  googleSub: string | null;
   name: string;
   emailVerifiedAt: Date | null;
   totpSecretEnc: string | null;
@@ -184,7 +185,9 @@ export function createMemoryDb() {
         const user =
           typeof where.id === 'string'
             ? (users.get(where.id) ?? null)
-            : userByEmail(String(where.email));
+            : typeof where.googleSub === 'string'
+              ? ([...users.values()].find((row) => row.googleSub === where.googleSub) ?? null)
+              : userByEmail(String(where.email));
         if (user === null) {
           return Promise.resolve(null);
         }
@@ -199,6 +202,7 @@ export function createMemoryDb() {
           uniqueConflict();
         }
         const row: UserRow = {
+          googleSub: null,
           emailVerifiedAt: null,
           totpSecretEnc: null,
           totpPendingSecretEnc: null,
@@ -316,6 +320,8 @@ export function createMemoryDb() {
       },
     },
     membership: {
+      count: ({ where }: { where: Where }) =>
+        Promise.resolve([...memberships.values()].filter((row) => matches(row, where)).length),
       findUnique: ({
         where,
       }: {

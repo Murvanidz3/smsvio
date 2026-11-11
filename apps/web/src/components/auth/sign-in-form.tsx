@@ -1,20 +1,23 @@
 'use client';
 
 import { safeNextPath } from '@smsvio/shared';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type SubmitEvent, useState } from 'react';
 
 import { AuthCard, fieldError, FormError, TextField } from '@/components/auth/fields';
+import { GoogleButton, googleErrorMessage } from '@/components/auth/google-button';
 import { Button } from '@/components/ui/button';
 import { accountApi } from '@/lib/api';
 
 export function SignInForm() {
   const router = useRouter();
   const params = useSearchParams();
+  const config = useQuery({ queryKey: ['auth-config'], queryFn: () => accountApi.config() });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [challenge, setChallenge] = useState<string | null>(null);
+  const [challenge, setChallenge] = useState<string | null>(params.get('totp') === '1' ? '' : null);
   const [code, setCode] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [pending, setPending] = useState(false);
@@ -36,7 +39,7 @@ export function SignInForm() {
           return;
         }
       } else {
-        await accountApi.totp({ challenge, code });
+        await accountApi.totp(challenge === '' ? { code } : { challenge, code });
       }
       goNext();
     } catch (caught) {
@@ -46,8 +49,17 @@ export function SignInForm() {
     }
   }
 
+  const googleError = googleErrorMessage(params.get('error'));
+  const emailDisabled = config.data?.emailMode === 'disabled';
+
   return (
     <AuthCard title="Sign in to SMSVIO">
+      {googleError === null ? null : (
+        <p role="alert" className="text-destructive text-sm">
+          {googleError}
+        </p>
+      )}
+      {config.data?.google === true && challenge === null ? <GoogleButton /> : null}
       <form className="grid gap-4" onSubmit={(event) => void onSubmit(event)}>
         {challenge === null ? (
           <>
@@ -92,11 +104,15 @@ export function SignInForm() {
           {pending ? 'Signing in…' : challenge === null ? 'Sign in' : 'Confirm code'}
         </Button>
       </form>
-      <p className="text-muted-foreground text-sm">
-        <Link className="text-primary underline-offset-4 hover:underline" href="/forgot-password">
-          Forgot your password?
-        </Link>
-      </p>
+      {emailDisabled ? (
+        <p className="text-muted-foreground text-sm">Email registration is coming soon.</p>
+      ) : (
+        <p className="text-muted-foreground text-sm">
+          <Link className="text-primary underline-offset-4 hover:underline" href="/forgot-password">
+            Forgot your password?
+          </Link>
+        </p>
+      )}
       <p className="text-muted-foreground text-sm">
         New to SMSVIO?{' '}
         <Link className="text-primary underline-offset-4 hover:underline" href="/signup">

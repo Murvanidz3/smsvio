@@ -367,14 +367,20 @@ Deliver the following, all in `infra/`:
 
 ## 14. Quality gates (must all pass before a phase is reported complete)
 
+Docker is not installed on this development machine, and localhost is not used. On this machine, run only these gates and fix every failure before reporting a phase:
+
 - `pnpm lint` — zero errors and zero warnings.
 - `pnpm typecheck` — zero errors.
-- `pnpm test` — unit and integration suites green; `packages/shared` coverage ≥ 95 %; API modules ≥ 80 %.
-- `pnpm build` — all apps build; Docker images build.
-- Playwright end-to-end tests green for every flow delivered so far, in both themes at desktop and mobile widths.
-- No errors or warnings in the browser console on any page.
-- Fresh-clone test: `cp .env.example .env && docker compose up` gives a working local stack with seeded data and one documented demo login.
-- Phase report written and `docs/` updated.
+- `pnpm test` — unit tests green; `packages/shared` coverage ≥ 95 %; API modules ≥ 80 %.
+- `pnpm build` — all apps build.
+
+These three gates run in GitHub Actions on every push to `main` and on every pull request. They must pass there before a phase is complete. The production image and deploy jobs run only on `main`, and only when all three have succeeded. A failure skips the deploy:
+
+- Postgres integration tests (`pnpm test:integration`), including tenant isolation.
+- Playwright for every flow delivered so far, in both themes at desktop and mobile widths, with no browser console errors or warnings.
+- Fresh-clone Compose smoke test: `cp .env.example .env && docker compose up` gives a working stack with seeded data and one documented demo login.
+
+Phase report written and `docs/` updated.
 
 ---
 

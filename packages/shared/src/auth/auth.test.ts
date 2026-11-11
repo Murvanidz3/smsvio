@@ -184,6 +184,7 @@ describe('response schemas', () => {
           accountPhoneE164: null,
           accountPhoneVerifiedAt: null,
           contactPhone: null,
+          hasPassword: false,
         },
         session: { id },
         organization: null,

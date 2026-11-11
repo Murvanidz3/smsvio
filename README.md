@@ -49,7 +49,11 @@ with `curl http://localhost:8080/readyz`.
 
 Sign in at <http://localhost:8080/signin> with `admin@smsvio.test` / `smsvio-demo-local`.
 That password is for this local stack only; the production migrate container refuses it.
-Mailpit shows outbound mail at <http://localhost:8025>.
+`.env.example` sets `EMAIL_MODE=disabled`, so email registration is hidden and the password
+form stays for that demo account. Set `EMAIL_MODE=smtp` to use Mailpit at
+<http://localhost:8025> for verification, reset, and invitation mail. Set `GOOGLE_CLIENT_ID`
+and `GOOGLE_CLIENT_SECRET` together to show "Continue with Google". The redirect URIs are in
+[docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Develop locally
 
@@ -92,8 +96,10 @@ pnpm --filter @smsvio/db migrate:dev --name <change-name>
 Install the Playwright browser once with `pnpm --filter @smsvio/web exec playwright install chromium`.
 The end-to-end tests fail on any browser console error or warning.
 
-CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs all of the above plus a
-fresh-clone `docker compose up` smoke test on every pull request and push.
+This machine does not run Docker or a local stack. Lint, typecheck, unit tests, and `pnpm build`
+run here. Playwright, the Postgres integration tests, and the fresh-clone Compose smoke test run
+in [CI](.github/workflows/ci.yml) on every pull request and every push to `main`. A push to
+`main` deploys only after all three succeed.
 
 ## Deployment
 

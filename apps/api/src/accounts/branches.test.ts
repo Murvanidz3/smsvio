@@ -23,15 +23,16 @@ function services() {
       return Promise.resolve();
     },
   };
+  const teams = new TeamService(db as never, mailer, testEnv);
   const auth = new AuthService(
     db as never,
     redis as never,
     mailer,
     testEnv,
     new RateLimiter(redis as never),
+    teams,
   );
   const sessions = new SessionService(db as never);
-  const teams = new TeamService(db as never, mailer, testEnv);
   return { db, auth, sessions, teams };
 }
 

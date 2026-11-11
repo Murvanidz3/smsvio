@@ -122,7 +122,7 @@ export class TeamService {
     state: AuthState,
     input: { email: string; role: InviteRole },
     client: ClientInfo,
-  ): Promise<{ id: string; message: string }> {
+  ): Promise<{ id: string; message: string; link?: string }> {
     assertCapability(state, 'manage');
     const member = await this.prisma.membership.findFirst({
       where: { organizationId: state.organizationId, user: { email: input.email } },
@@ -167,7 +167,7 @@ export class TeamService {
             invitedById: state.userId,
           },
         });
-    await this.sendInvite(input.email, organization.name, token);
+    const link = await this.sendInvite(input.email, organization.name, token);
     await writeAudit(this.prisma, {
       organizationId: state.organizationId,
       actorUserId: state.userId,
@@ -177,14 +177,18 @@ export class TeamService {
       meta: { role: input.role },
       ip: client.ip,
     });
-    return { id: invitation.id, message: 'Invitation sent.' };
+    return {
+      id: invitation.id,
+      message: link === null ? 'Invitation sent.' : 'Copy this link and send it to them.',
+      ...(link === null ? {} : { link }),
+    };
   }
 
   async resend(
     state: AuthState,
     invitationId: string,
     client: ClientInfo,
-  ): Promise<{ message: string }> {
+  ): Promise<{ message: string; link?: string }> {
     assertCapability(state, 'manage');
     const invitation = await this.openInvitation(state.organizationId, invitationId);
     const token = randomToken();
@@ -192,7 +196,7 @@ export class TeamService {
       where: { id: invitation.id },
       data: { tokenHash: hashToken(token), expiresAt: new Date(Date.now() + INVITATION_TTL_MS) },
     });
-    await this.sendInvite(invitation.email, invitation.organization.name, token);
+    const link = await this.sendInvite(invitation.email, invitation.organization.name, token);
     await writeAudit(this.prisma, {
       organizationId: state.organizationId,
       actorUserId: state.userId,
@@ -201,7 +205,10 @@ export class TeamService {
       targetId: invitation.id,
       ip: client.ip,
     });
-    return { message: 'Invitation sent.' };
+    return {
+      message: link === null ? 'Invitation sent.' : 'Copy this link and send it to them.',
+      ...(link === null ? {} : { link }),
+    };
   }
 
   async revoke(
@@ -482,9 +489,95 @@ export class TeamService {
     };
   }
 
-  private async sendInvite(email: string, organizationName: string, token: string): Promise<void> {
+  async claimInvitation(
+    userId: string,
+    email: string,
+    token: string,
+    client: ClientInfo,
+  ): Promise<string> {
+    const invitation = await this.findByToken(token);
+    if (invitation === null || !isInviteRole(invitation.role)) {
+      throw invalidLink();
+    }
+    if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+      throw new ApiError(
+        403,
+        'invite_email_mismatch',
+        'Use the Google account for the invited email address.',
+      );
+    }
+    const existing = await this.prisma.membership.findUnique({
+      where: { userId_organizationId: { userId, organizationId: invitation.organizationId } },
+    });
+    if (existing !== null) {
+      await this.prisma.invitation.update({
+        where: { id: invitation.id },
+        data: { acceptedAt: new Date() },
+      });
+      return invitation.organizationId;
+    }
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.membership.create({
+          data: { userId, organizationId: invitation.organizationId, role: invitation.role },
+        });
+        await tx.invitation.update({
+          where: { id: invitation.id },
+          data: { acceptedAt: new Date() },
+        });
+        await writeAudit(tx, {
+          organizationId: invitation.organizationId,
+          actorUserId: userId,
+          action: 'invitation.accepted',
+          targetType: 'invitation',
+          targetId: invitation.id,
+          ip: client.ip,
+        });
+      });
+    } catch (error) {
+      if (!isUniqueConflict(error)) {
+        throw error;
+      }
+    }
+    return invitation.organizationId;
+  }
+
+  async createOrganization(
+    state: AuthState,
+    name: string,
+    client: ClientInfo,
+  ): Promise<SessionResponse> {
+    const memberships = await this.prisma.membership.count({ where: { userId: state.userId } });
+    if (memberships > 0) {
+      throw new ApiError(409, 'organization_exists', 'You already belong to an organization.');
+    }
+    const organization = await this.prisma.organization.create({
+      data: { name, timezone: 'UTC' },
+    });
+    await this.prisma.membership.create({
+      data: { userId: state.userId, organizationId: organization.id, role: 'OWNER' },
+    });
+    await writeAudit(this.prisma, {
+      organizationId: organization.id,
+      actorUserId: state.userId,
+      action: 'organization.created',
+      targetType: 'organization',
+      targetId: organization.id,
+      ip: client.ip,
+    });
+    return this.present(state.userId, state.sessionId, organization.id);
+  }
+
+  private async sendInvite(
+    email: string,
+    organizationName: string,
+    token: string,
+  ): Promise<string | null> {
     const url = new URL('/accept-invite', this.env.PUBLIC_ORIGIN);
     url.searchParams.set('token', token);
+    if (this.env.EMAIL_MODE !== 'smtp') {
+      return url.toString();
+    }
     const rendered = await renderMessage(
       InvitationEmail({ organizationName, url: url.toString() }),
     );
@@ -493,6 +586,7 @@ export class TeamService {
       subject: emailSubject(`Join ${organizationName} on SMSVIO`),
       ...rendered,
     });
+    return null;
   }
 
   private async openInvitation(organizationId: string, invitationId: string) {

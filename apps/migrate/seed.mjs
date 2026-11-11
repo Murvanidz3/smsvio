@@ -18,6 +18,9 @@ if (email === undefined || email === '') {
 
 const { ARGON2ID_OPTIONS, LOCAL_DEMO_PASSWORD } = await import('@smsvio/shared');
 const password = process.env.SEED_ADMIN_PASSWORD ?? '';
+if (password === '') {
+  process.exit(0);
+}
 if (process.env.NODE_ENV === 'production' && password === LOCAL_DEMO_PASSWORD) {
   console.error('Refusing to seed the local demo password in production.');
   process.exit(1);

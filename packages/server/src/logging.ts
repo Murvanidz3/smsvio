@@ -23,6 +23,11 @@ export const LOG_REDACT_PATHS = [
   '*.apiKey',
   '*.secret',
   '*.totp',
+  '*.id_token',
+  '*.access_token',
+  '*.refresh_token',
+  '*.code_verifier',
+  '*.nonce',
 ] as const;
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{8,128}$/;

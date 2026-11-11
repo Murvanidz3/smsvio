@@ -49,8 +49,7 @@ jobs:
           SITE_DOMAIN: example.com
           ACME_EMAIL: ops@example.com
           APP_ENCRYPTION_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
-          SMTP_HOST: smtp.example.com
-          SMTP_FROM: SMSVIO <noreply@example.com>
+          EMAIL_MODE: disabled
         run: docker compose -f infra/docker-compose.prod.yml config --quiet
 
   integration:
@@ -79,6 +78,7 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       PUBLIC_ORIGIN: http://127.0.0.1:4000
       APP_ENCRYPTION_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
+      EMAIL_MODE: smtp
       SMTP_HOST: 127.0.0.1
       SMTP_FROM: SMSVIO <noreply@smsvio.test>
     steps:
@@ -163,7 +163,10 @@ jobs:
   images:
     name: Build and push images
     needs: [verify, integration, e2e, compose-smoke]
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name != 'pull_request' && github.ref == 'refs/heads/main' &&
+      needs.verify.result == 'success' && needs.integration.result == 'success' &&
+      needs.e2e.result == 'success' && needs.compose-smoke.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

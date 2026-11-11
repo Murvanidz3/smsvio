@@ -15,7 +15,7 @@ header {
 	-X-Powered-By
 }
 
-@api path /api /api/* /healthz /readyz
+@api path /api /api/* /healthz /readyz /auth/google/callback
 handle @api {
 	reverse_proxy api:4000
 }

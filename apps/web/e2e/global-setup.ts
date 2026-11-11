@@ -49,32 +49,61 @@ export default async function globalSetup(): Promise<void> {
   const port = process.env.PLAYWRIGHT_PORT ?? '3100';
   const apiPort = '4010';
   const healthUrl = `http://127.0.0.1:${apiPort}/healthz`;
+  let smtpReady = false;
   try {
-    const existing = await fetch(healthUrl);
-    if (existing.ok) {
-      return;
-    }
+    smtpReady = (await fetch(healthUrl)).ok;
   } catch {
-    // Start a local API for this run.
+    smtpReady = false;
   }
 
-  const seed = spawnSync(process.execPath, ['apps/migrate/seed.mjs'], {
+  const children: ChildProcess[] = [];
+  if (!smtpReady) {
+    const seed = spawnSync(process.execPath, ['apps/migrate/seed.mjs'], {
+      cwd: root,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        SEED_ADMIN_EMAIL: process.env.SEED_ADMIN_EMAIL ?? 'admin@smsvio.test',
+        SEED_ADMIN_PASSWORD: process.env.SEED_ADMIN_PASSWORD ?? 'smsvio-demo-local',
+        SEED_ADMIN_NAME: process.env.SEED_ADMIN_NAME ?? 'SMSVIO Admin',
+        SEED_ORG_NAME: process.env.SEED_ORG_NAME ?? 'SMSVIO Demo',
+      },
+    });
+    if (seed.status !== 0) {
+      throw new Error('Database migrate and seed failed.');
+    }
+
+    const child: ChildProcess = spawn(process.execPath, ['apps/api/dist/main.js'], {
+      cwd: root,
+      detached: true,
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        LOG_LEVEL: 'silent',
+        API_HOST: '127.0.0.1',
+        API_PORT: apiPort,
+        PUBLIC_ORIGIN: `http://127.0.0.1:${port}`,
+        APP_ENCRYPTION_KEY: process.env.APP_ENCRYPTION_KEY ?? 'ab'.repeat(32),
+        EMAIL_MODE: 'smtp',
+        SMTP_HOST: '127.0.0.1',
+        SMTP_PORT: '1025',
+        SMTP_FROM: process.env.SMTP_FROM ?? 'SMSVIO <noreply@smsvio.test>',
+        MAIL_SINK_DIR: mailSinkDir,
+        TRUST_PROXY_HOPS: '0',
+      },
+    });
+    children.push(child);
+  }
+  const mock: ChildProcess = spawn(process.execPath, ['apps/web/e2e/google-mock.mjs'], {
     cwd: root,
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      SEED_ADMIN_EMAIL: process.env.SEED_ADMIN_EMAIL ?? 'admin@smsvio.test',
-      SEED_ADMIN_PASSWORD: process.env.SEED_ADMIN_PASSWORD ?? 'smsvio-demo-local',
-      SEED_ADMIN_NAME: process.env.SEED_ADMIN_NAME ?? 'SMSVIO Admin',
-      SEED_ORG_NAME: process.env.SEED_ORG_NAME ?? 'SMSVIO Demo',
-    },
+    detached: true,
+    stdio: 'ignore',
+    env: { ...process.env, GOOGLE_MOCK_PORT: '4099' },
   });
-  if (seed.status !== 0) {
-    throw new Error('Database migrate and seed failed.');
-  }
-
-  const child: ChildProcess = spawn(process.execPath, ['apps/api/dist/main.js'], {
+  children.push(mock);
+  const disabled: ChildProcess = spawn(process.execPath, ['apps/api/dist/main.js'], {
     cwd: root,
     detached: true,
     stdio: 'ignore',
@@ -83,19 +112,32 @@ export default async function globalSetup(): Promise<void> {
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
       API_HOST: '127.0.0.1',
-      API_PORT: apiPort,
-      PUBLIC_ORIGIN: `http://127.0.0.1:${port}`,
+      API_PORT: '4011',
+      PUBLIC_ORIGIN: 'http://127.0.0.1:3101',
       APP_ENCRYPTION_KEY: process.env.APP_ENCRYPTION_KEY ?? 'ab'.repeat(32),
-      SMTP_HOST: '127.0.0.1',
-      SMTP_PORT: '1025',
-      SMTP_FROM: process.env.SMTP_FROM ?? 'SMSVIO <noreply@smsvio.test>',
-      MAIL_SINK_DIR: mailSinkDir,
+      EMAIL_MODE: 'disabled',
+      GOOGLE_CLIENT_ID: 'e2e-client',
+      GOOGLE_CLIENT_SECRET: 'e2e-secret',
+      GOOGLE_AUTHORIZATION_ENDPOINT: 'http://127.0.0.1:4099/authorize',
+      GOOGLE_TOKEN_ENDPOINT: 'http://127.0.0.1:4099/token',
+      GOOGLE_JWKS_URI: 'http://127.0.0.1:4099/jwks',
+      GOOGLE_ISSUER: 'http://127.0.0.1:4099',
+      DATABASE_URL: process.env.DATABASE_URL,
+      REDIS_URL: process.env.REDIS_URL,
       TRUST_PROXY_HOPS: '0',
     },
   });
-  child.unref();
-  if (child.pid !== undefined) {
-    writeFileSync(pidFile, String(child.pid));
+  children.push(disabled);
+  for (const processId of children) {
+    processId.unref();
   }
+  writeFileSync(
+    pidFile,
+    children
+      .map((processId) => processId.pid)
+      .filter((pid) => pid !== undefined)
+      .join('\n'),
+  );
   await waitForHealth(healthUrl);
+  await waitForHealth('http://127.0.0.1:4011/healthz');
 }

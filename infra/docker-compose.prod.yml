@@ -96,11 +96,15 @@ services:
       TRUST_PROXY_HOPS: '1'
       PUBLIC_ORIGIN: https://${SITE_DOMAIN:?SITE_DOMAIN is required}
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?APP_ENCRYPTION_KEY is required}
-      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST is required}
+      EMAIL_MODE: ${EMAIL_MODE:-disabled}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:?SMTP_FROM is required}
+      SMTP_FROM: ${SMTP_FROM:-}
     tmpfs:
       - /tmp
     mem_limit: 512m

@@ -30,6 +30,14 @@ describe('loadApiEnv', () => {
       SMTP_USER: undefined,
       SMTP_PASSWORD: undefined,
       MAIL_SINK_DIR: undefined,
+      EMAIL_MODE: 'disabled',
+      GOOGLE_CLIENT_ID: undefined,
+      GOOGLE_CLIENT_SECRET: undefined,
+      SEED_ADMIN_EMAIL: undefined,
+      GOOGLE_AUTHORIZATION_ENDPOINT: undefined,
+      GOOGLE_TOKEN_ENDPOINT: undefined,
+      GOOGLE_JWKS_URI: undefined,
+      GOOGLE_ISSUER: undefined,
     });
   });
 
@@ -57,6 +65,24 @@ describe('loadApiEnv', () => {
         SMTP_USER: 'only-user',
       }),
     ).toThrow(/SMTP_USER[\s\S]*MAIL_SINK_DIR/);
+  });
+
+  it('boots without SMTP when email is disabled', () => {
+    const { SMTP_HOST: _host, SMTP_FROM: _from, ...rest } = base;
+    expect(loadApiEnv(rest).EMAIL_MODE).toBe('disabled');
+  });
+
+  it('requires SMTP settings only when email is sent', () => {
+    const { SMTP_HOST: _host, SMTP_FROM: _from, ...rest } = base;
+    expect(() => loadApiEnv({ ...rest, EMAIL_MODE: 'smtp' })).toThrow(/SMTP_HOST/);
+  });
+
+  it('requires both Google credentials', () => {
+    expect(() => loadApiEnv({ ...base, GOOGLE_CLIENT_ID: 'client' })).toThrow(/GOOGLE_CLIENT_ID/);
+    expect(
+      loadApiEnv({ ...base, GOOGLE_CLIENT_ID: 'client', GOOGLE_CLIENT_SECRET: 'secret' })
+        .GOOGLE_CLIENT_ID,
+    ).toBe('client');
   });
 
   it('fails fast naming the missing variables', () => {

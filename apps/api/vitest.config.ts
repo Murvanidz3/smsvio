@@ -15,6 +15,7 @@ export default defineConfig({
         'src/memory-db.ts',
         'src/main.ts',
         'src/instrument.ts',
+        'src/scripts/**',
       ],
       thresholds: { lines: 80, functions: 80, branches: 80, statements: 80 },
     },

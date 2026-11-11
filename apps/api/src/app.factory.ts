@@ -38,6 +38,7 @@ export async function configureApp(app: NestFastifyApplication): Promise<NestFas
     exclude: [
       { path: 'healthz', method: RequestMethod.GET },
       { path: 'readyz', method: RequestMethod.GET },
+      { path: 'auth/google/callback', method: RequestMethod.GET },
     ],
   });
   app
@@ -46,7 +47,7 @@ export async function configureApp(app: NestFastifyApplication): Promise<NestFas
     .addHook('onRequest', (request, reply, done) => {
       void reply.header('x-request-id', request.id);
       const path = request.url.split('?')[0] ?? request.url;
-      if (path.startsWith('/api/internal')) {
+      if (path.startsWith('/api/internal') || path === '/auth/google/callback') {
         void reply.header('cache-control', 'no-store');
       }
       done();

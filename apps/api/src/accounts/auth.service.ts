@@ -29,6 +29,17 @@ import { dummyPasswordHash, hashPassword, verifyPassword } from '../security/pas
 import { RateLimiter } from '../security/rate-limit.js';
 import { hashToken, randomToken } from '../security/tokens.js';
 import {
+  authorizationUrl,
+  createPkce,
+  exchangeGoogleCode,
+  googleConfigured,
+  googleDisplayName,
+  googleEndpoints,
+  googleJwks,
+  googleRedirectUri,
+  verifyGoogleIdToken,
+} from './google.js';
+import {
   type AuthState,
   type OpenedSession,
   assertCapability,
@@ -42,6 +53,7 @@ import {
   presentAccount,
   writeAudit,
 } from './support.js';
+import { TeamService } from './team.service.js';
 
 const CHECK_YOUR_EMAIL = 'Check your email for the next step.';
 const RESET_SENT = 'If an account exists for that email, we sent a reset link.';
@@ -55,12 +67,14 @@ export class AuthService {
     @Inject(MAILER) private readonly mailer: Mailer,
     @Inject(API_ENV) private readonly env: ApiEnv,
     private readonly limiter: RateLimiter,
+    private readonly teams: TeamService,
   ) {}
 
   async signUp(
     input: { name: string; email: string; password: string; organizationName: string },
     client: ClientInfo,
   ): Promise<{ message: string }> {
+    this.assertEmailEnabled();
     await this.limiter.enforce(
       ipKey('signup', client.ip),
       RATE_LIMITS.signupIp.limit,
@@ -155,6 +169,7 @@ export class AuthService {
   }
 
   async resendVerification(email: string, client: ClientInfo): Promise<{ message: string }> {
+    this.assertEmailEnabled();
     await this.limiter.enforce(
       ipKey('verify', client.ip),
       RATE_LIMITS.forgotIp.limit,
@@ -194,7 +209,12 @@ export class AuthService {
     }
     if (user.totpEnabledAt !== null && user.totpSecretEnc !== null) {
       const challenge = randomToken();
-      await this.redis.set(challengeKey(challenge), user.id, 'EX', TOTP_CHALLENGE_TTL_SECONDS);
+      await this.redis.set(
+        challengeKey(challenge),
+        JSON.stringify({ userId: user.id }),
+        'EX',
+        TOTP_CHALLENGE_TTL_SECONDS,
+      );
       return { challenge };
     }
     return this.finishSignIn(user.id, client);
@@ -207,16 +227,17 @@ export class AuthService {
       RATE_LIMITS.totpIp.windowMs,
     );
     const key = challengeKey(challenge);
-    const userId = await this.redis.getdel(key);
-    if (userId === null) {
+    const stored = await this.redis.getdel(key);
+    if (stored === null) {
       throw new ApiError(401, 'invalid_totp', 'That code is incorrect or has expired.');
     }
+    const pending = readChallenge(stored);
     await this.limiter.enforce(
-      accountKey('totp', userId),
+      accountKey('totp', pending.userId),
       RATE_LIMITS.totpAccount.limit,
       RATE_LIMITS.totpAccount.windowMs,
     );
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({ where: { id: pending.userId } });
     if (!user?.totpSecretEnc || user.totpEnabledAt === null) {
       throw new ApiError(401, 'invalid_totp', 'That code is incorrect or has expired.');
     }
@@ -228,10 +249,15 @@ export class AuthService {
       user.totpLastStep,
     );
     await this.prisma.user.update({ where: { id: user.id }, data: { totpLastStep: step } });
-    return this.finishSignIn(user.id, client);
+    const organizationId =
+      pending.invitationToken === undefined
+        ? null
+        : await this.teams.claimInvitation(user.id, user.email, pending.invitationToken, client);
+    return this.finishSignIn(user.id, client, organizationId);
   }
 
   async forgotPassword(email: string, client: ClientInfo): Promise<{ message: string }> {
+    this.assertEmailEnabled();
     await this.limiter.enforce(
       ipKey('forgot', client.ip),
       RATE_LIMITS.forgotIp.limit,
@@ -428,6 +454,28 @@ export class AuthService {
     });
   }
 
+  async setPassword(state: AuthState, password: string, client: ClientInfo): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: state.userId } });
+    if (user === null) {
+      throw new ApiError(401, 'unauthenticated', 'Sign in to continue.');
+    }
+    if (user.passwordHash !== null) {
+      throw new ApiError(409, 'password_exists', 'Use your current password to change it.');
+    }
+    const passwordHash = await hashPassword(password);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: state.userId }, data: { passwordHash } });
+      await writeAudit(tx, {
+        organizationId: state.organizationId,
+        actorUserId: state.userId,
+        action: 'account.password_set',
+        targetType: 'user',
+        targetId: state.userId,
+        ip: client.ip,
+      });
+    });
+  }
+
   async updateDetails(
     state: AuthState,
     input: { timezone: string; contactPhone: string | null },
@@ -444,6 +492,13 @@ export class AuthService {
     phone: string,
     client: ClientInfo,
   ): Promise<{ message: string }> {
+    if (this.env.EMAIL_MODE !== 'smtp') {
+      throw new ApiError(
+        403,
+        'phone_unavailable',
+        'Phone verification starts when text-message delivery is available.',
+      );
+    }
     await this.limiter.enforce(
       ipKey('phone', client.ip),
       RATE_LIMITS.phoneIp.limit,
@@ -537,8 +592,190 @@ export class AuthService {
     return this.reload(state);
   }
 
-  private async finishSignIn(userId: string, client: ClientInfo): Promise<OpenedSession> {
-    const opened = await openSession(this.prisma, userId, client, null);
+  authConfig(): { emailMode: 'disabled' | 'smtp'; google: boolean } {
+    return { emailMode: this.env.EMAIL_MODE, google: googleConfigured(this.env) };
+  }
+
+  async beginGoogle(invitation: string | undefined, client: ClientInfo): Promise<string> {
+    if (!googleConfigured(this.env)) {
+      throw new ApiError(404, 'google_unavailable', 'Google sign-in is not available.');
+    }
+    await this.limiter.enforce(
+      ipKey('google', client.ip),
+      RATE_LIMITS.signinIp.limit,
+      RATE_LIMITS.signinIp.windowMs,
+    );
+    const { verifier, challenge } = createPkce();
+    const state = randomToken();
+    const nonce = randomToken();
+    await this.redis.set(
+      oauthKey(state),
+      JSON.stringify({ verifier, nonce, invitation: invitation ?? null }),
+      'EX',
+      10 * 60,
+    );
+    const clientId = this.env.GOOGLE_CLIENT_ID;
+    if (clientId === undefined) {
+      throw new ApiError(404, 'google_unavailable', 'Google sign-in is not available.');
+    }
+    return authorizationUrl({
+      endpoints: googleEndpoints(this.env),
+      clientId,
+      redirectUri: googleRedirectUri(this.env.PUBLIC_ORIGIN),
+      state,
+      nonce,
+      challenge,
+    });
+  }
+
+  async finishGoogle(
+    code: string | undefined,
+    state: string | undefined,
+    client: ClientInfo,
+  ): Promise<{ kind: 'session'; opened: OpenedSession } | { kind: 'totp'; challenge: string }> {
+    if (code === undefined || state === undefined || code.length === 0 || state.length < 20) {
+      throw new ApiError(400, 'invalid_state', 'That sign-in attempt expired. Try again.');
+    }
+    const stored = await this.redis.getdel(oauthKey(state));
+    if (stored === null) {
+      throw new ApiError(400, 'invalid_state', 'That sign-in attempt expired. Try again.');
+    }
+    const pending = readOauth(stored);
+    const clientId = this.env.GOOGLE_CLIENT_ID;
+    const clientSecret = this.env.GOOGLE_CLIENT_SECRET;
+    if (clientId === undefined || clientSecret === undefined) {
+      throw new ApiError(404, 'google_unavailable', 'Google sign-in is not available.');
+    }
+    const endpoints = googleEndpoints(this.env);
+    let idToken: string;
+    try {
+      idToken = await exchangeGoogleCode({
+        endpoints,
+        clientId,
+        clientSecret,
+        redirectUri: googleRedirectUri(this.env.PUBLIC_ORIGIN),
+        code,
+        verifier: pending.verifier,
+      });
+    } catch {
+      throw new ApiError(502, 'google_unavailable', 'Google sign-in is not available right now.');
+    }
+    let identity;
+    try {
+      identity = await verifyGoogleIdToken({
+        idToken,
+        jwks: googleJwks(endpoints.jwksUri),
+        issuer: endpoints.issuer,
+        audience: clientId,
+        nonce: pending.nonce,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'email_unverified') {
+        throw new ApiError(
+          403,
+          'google_email_unverified',
+          'That Google account has not verified its email.',
+        );
+      }
+      throw new ApiError(401, 'invalid_state', 'That sign-in attempt expired. Try again.');
+    }
+    const user = await this.upsertGoogleUser(identity, client);
+    if (pending.invitation !== null) {
+      const preview = await this.teams.preview(pending.invitation);
+      if (preview.email !== user.email) {
+        throw new ApiError(
+          403,
+          'invite_email_mismatch',
+          'Use the Google account for the invited email address.',
+        );
+      }
+    }
+    if (user.totpEnabledAt !== null && user.totpSecretEnc !== null) {
+      const challenge = randomToken();
+      await this.redis.set(
+        challengeKey(challenge),
+        JSON.stringify({
+          userId: user.id,
+          ...(pending.invitation === null ? {} : { invitationToken: pending.invitation }),
+        }),
+        'EX',
+        TOTP_CHALLENGE_TTL_SECONDS,
+      );
+      return { kind: 'totp', challenge };
+    }
+    const organizationId =
+      pending.invitation === null
+        ? null
+        : await this.teams.claimInvitation(user.id, user.email, pending.invitation, client);
+    return { kind: 'session', opened: await this.finishSignIn(user.id, client, organizationId) };
+  }
+
+  private async upsertGoogleUser(
+    identity: { sub: string; email: string; name: string | undefined },
+    client: ClientInfo,
+  ) {
+    const bySub = await this.prisma.user.findUnique({ where: { googleSub: identity.sub } });
+    const byEmail = await this.prisma.user.findUnique({ where: { email: identity.email } });
+    if (bySub !== null && byEmail !== null && bySub.id !== byEmail.id) {
+      throw new ApiError(409, 'google_conflict', 'That Google account cannot be linked.');
+    }
+    if (bySub !== null) {
+      return bySub;
+    }
+    if (byEmail === null) {
+      const created = await this.prisma.user.create({
+        data: {
+          email: identity.email,
+          name: googleDisplayName(identity.name, identity.email),
+          passwordHash: null,
+          googleSub: identity.sub,
+          emailVerifiedAt: new Date(),
+          timezone: 'UTC',
+        },
+      });
+      await writeAudit(this.prisma, {
+        organizationId: null,
+        actorUserId: created.id,
+        action: 'account.google_signed_up',
+        targetType: 'user',
+        targetId: created.id,
+        ip: client.ip,
+      });
+      return created;
+    }
+    if (byEmail.googleSub !== null && byEmail.googleSub !== identity.sub) {
+      throw new ApiError(409, 'google_conflict', 'That Google account cannot be linked.');
+    }
+    if (byEmail.emailVerifiedAt === null) {
+      await this.prisma.session.updateMany({
+        where: { userId: byEmail.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return this.prisma.user.update({
+        where: { id: byEmail.id },
+        data: {
+          googleSub: identity.sub,
+          emailVerifiedAt: new Date(),
+          passwordHash: null,
+        },
+      });
+    }
+    if (byEmail.googleSub === null) {
+      return this.prisma.user.update({
+        where: { id: byEmail.id },
+        data: { googleSub: identity.sub },
+      });
+    }
+    return byEmail;
+  }
+
+  private async finishSignIn(
+    userId: string,
+    client: ClientInfo,
+    organizationId: string | null = null,
+  ): Promise<OpenedSession> {
+    await this.promotePlatformAdmin(userId);
+    const opened = await openSession(this.prisma, userId, client, organizationId);
     await writeAudit(this.prisma, {
       organizationId: opened.organizationId,
       actorUserId: userId,
@@ -568,10 +805,34 @@ export class AuthService {
 
   private async requirePassword(userId: string, currentPassword: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (user === null || !(await verifyPassword(user.passwordHash, currentPassword))) {
+    const hash = user?.passwordHash ?? (await dummyPasswordHash());
+    const passwordOk = await verifyPassword(hash, currentPassword);
+    if (!user?.passwordHash || !passwordOk) {
       throw new ApiError(401, 'invalid_credentials', 'Current password is incorrect.');
     }
     return user;
+  }
+
+  private assertEmailEnabled(): void {
+    if (this.env.EMAIL_MODE !== 'smtp') {
+      throw new ApiError(403, 'email_disabled', 'Email registration is coming soon.');
+    }
+  }
+
+  private async promotePlatformAdmin(userId: string): Promise<void> {
+    const adminEmail = this.env.SEED_ADMIN_EMAIL;
+    if (adminEmail === undefined) {
+      return;
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (
+      user !== null &&
+      user.emailVerifiedAt !== null &&
+      user.email.toLowerCase() === adminEmail &&
+      !user.isPlatformAdmin
+    ) {
+      await this.prisma.user.update({ where: { id: user.id }, data: { isPlatformAdmin: true } });
+    }
   }
 
   private async reload(state: AuthState): Promise<SessionResponse> {
@@ -591,6 +852,47 @@ function actionUrl(origin: string, path: string, token: string): string {
 
 function challengeKey(challenge: string): string {
   return `smsvio:totp:${hashToken(challenge)}`;
+}
+
+function oauthKey(state: string): string {
+  return `smsvio:oauth:${hashToken(state)}`;
+}
+
+function readChallenge(stored: string): { userId: string; invitationToken?: string } {
+  if (stored.startsWith('{')) {
+    const parsed: unknown = JSON.parse(stored);
+    if (typeof parsed === 'object' && parsed !== null && 'userId' in parsed) {
+      const userId = parsed.userId;
+      const invitationToken = 'invitationToken' in parsed ? parsed.invitationToken : undefined;
+      if (typeof userId === 'string') {
+        return {
+          userId,
+          ...(typeof invitationToken === 'string' ? { invitationToken } : {}),
+        };
+      }
+    }
+  }
+  return { userId: stored };
+}
+
+function readOauth(stored: string): { verifier: string; nonce: string; invitation: string | null } {
+  const parsed: unknown = JSON.parse(stored);
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    !('verifier' in parsed) ||
+    !('nonce' in parsed) ||
+    typeof parsed.verifier !== 'string' ||
+    typeof parsed.nonce !== 'string'
+  ) {
+    throw new ApiError(400, 'invalid_state', 'That sign-in attempt expired. Try again.');
+  }
+  const invitation = 'invitation' in parsed ? parsed.invitation : null;
+  return {
+    verifier: parsed.verifier,
+    nonce: parsed.nonce,
+    invitation: typeof invitation === 'string' ? invitation : null,
+  };
 }
 
 function ipKey(action: string, ip: string | null): string {

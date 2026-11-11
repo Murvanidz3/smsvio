@@ -30,8 +30,12 @@
         "REDIS_URL",
         "PUBLIC_ORIGIN",
         "APP_ENCRYPTION_KEY",
+        "EMAIL_MODE",
         "SMTP_HOST",
-        "SMTP_FROM"
+        "SMTP_FROM",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "SEED_ADMIN_EMAIL"
       ]
     },
     "test:e2e": {

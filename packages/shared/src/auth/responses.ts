@@ -17,6 +17,7 @@ export const sessionResponseSchema = z.object({
     accountPhoneE164: z.string().nullable(),
     accountPhoneVerifiedAt: z.iso.datetime().nullable(),
     contactPhone: z.string().nullable(),
+    hasPassword: z.boolean(),
   }),
   session: z.object({ id: z.uuid() }),
   organization: z

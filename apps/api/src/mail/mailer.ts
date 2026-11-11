@@ -32,6 +32,11 @@ export function emailSubject(value: string): string {
 }
 
 export function createMailer(env: ApiEnv): Mailer {
+  if (env.EMAIL_MODE !== 'smtp') {
+    return {
+      send: () => Promise.reject(new Error('Email sending is disabled.')),
+    };
+  }
   if (env.NODE_ENV !== 'production' && env.MAIL_SINK_DIR !== undefined) {
     return new FileMailer(env.MAIL_SINK_DIR);
   }
@@ -61,6 +66,9 @@ class SmtpMailer implements Mailer {
   private readonly transport: Transporter;
 
   constructor(private readonly env: ApiEnv) {
+    if (env.SMTP_HOST === undefined || env.SMTP_FROM === undefined) {
+      throw new Error('SMTP_HOST and SMTP_FROM are required when EMAIL_MODE is smtp.');
+    }
     this.transport = nodemailer.createTransport({
       host: env.SMTP_HOST,
       port: env.SMTP_PORT,

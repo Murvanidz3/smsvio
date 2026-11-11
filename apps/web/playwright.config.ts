@@ -22,25 +22,55 @@ export default defineConfig({
     baseURL,
     trace: 'retain-on-failure',
   },
-  projects: (['desktop', 'mobile'] as const).flatMap((size) =>
-    (['light', 'dark'] as const).map((colorScheme) => ({
-      name: `${size}-${colorScheme}`,
-      use: { ...viewports[size], colorScheme },
-    })),
-  ),
+  projects: [
+    ...(['desktop', 'mobile'] as const).flatMap((size) =>
+      (['light', 'dark'] as const).map((colorScheme) => ({
+        name: `${size}-${colorScheme}`,
+        testIgnore: /google\.spec\.ts/,
+        use: { ...viewports[size], colorScheme },
+      })),
+    ),
+    {
+      name: 'google-desktop',
+      testMatch: /google\.spec\.ts/,
+      use: {
+        ...viewports.desktop,
+        colorScheme: 'light' as const,
+        baseURL: 'http://127.0.0.1:3101',
+      },
+    },
+    {
+      name: 'google-mobile',
+      testMatch: /google\.spec\.ts/,
+      use: { ...viewports.mobile, colorScheme: 'dark' as const, baseURL: 'http://127.0.0.1:3101' },
+    },
+  ],
   ...(externalBaseUrl
     ? {}
     : {
-        webServer: {
-          command: 'node scripts/start-standalone.mjs',
-          url: `${baseURL}/signin`,
-          env: {
-            PORT: String(port),
-            HOSTNAME: '127.0.0.1',
-            API_INTERNAL_URL: 'http://127.0.0.1:4010',
+        webServer: [
+          {
+            command: 'node scripts/start-standalone.mjs',
+            url: `${baseURL}/signin`,
+            env: {
+              PORT: String(port),
+              HOSTNAME: '127.0.0.1',
+              API_INTERNAL_URL: 'http://127.0.0.1:4010',
+            },
+            reuseExistingServer: !isCi,
+            timeout: 60_000,
           },
-          reuseExistingServer: !isCi,
-          timeout: 60_000,
-        },
+          {
+            command: 'node scripts/start-standalone.mjs',
+            url: 'http://127.0.0.1:3101/signin',
+            env: {
+              PORT: '3101',
+              HOSTNAME: '127.0.0.1',
+              API_INTERNAL_URL: 'http://127.0.0.1:4011',
+            },
+            reuseExistingServer: !isCi,
+            timeout: 60_000,
+          },
+        ],
       }),
 });

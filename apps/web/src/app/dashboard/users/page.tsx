@@ -30,6 +30,7 @@ export default function UsersPage() {
   const [pageSize, setPageSize] = useState(10);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<(typeof ROLES)[number]>('VIEWER');
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
   const query = `?q=${encodeURIComponent(q)}&page=${String(page)}&pageSize=${String(pageSize)}&sort=name&direction=asc`;
   const directory = useQuery({
     queryKey: ['members', query],
@@ -41,6 +42,7 @@ export default function UsersPage() {
     event.preventDefault();
     try {
       const result = await accountApi.invite({ email, role });
+      setInviteLink(result.link ?? null);
       toast(result.message);
       setEmail('');
       await queryClient.invalidateQueries({ queryKey: ['members'] });
@@ -52,6 +54,14 @@ export default function UsersPage() {
   async function act(work: () => Promise<unknown>) {
     try {
       const result = await work();
+      if (
+        result !== null &&
+        typeof result === 'object' &&
+        'link' in result &&
+        typeof result.link === 'string'
+      ) {
+        setInviteLink(result.link);
+      }
       toast(
         result !== null && typeof result === 'object' && 'message' in result
           ? String(result.message)
@@ -122,6 +132,30 @@ export default function UsersPage() {
           <Button type="submit">Invite</Button>
         </form>
       ) : null}
+      {inviteLink === null ? null : (
+        <div className="grid max-w-xl gap-2">
+          <p className="text-sm">Copy this link and send it to them. It works once.</p>
+          <div className="flex gap-2">
+            <input
+              className="border-input h-9 min-w-0 flex-1 rounded-lg border px-3 text-sm"
+              readOnly
+              value={inviteLink}
+              aria-label="Invitation link"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void navigator.clipboard.writeText(inviteLink).then(() => {
+                  toast('Link copied.');
+                });
+              }}
+            >
+              Copy
+            </Button>
+          </div>
+        </div>
+      )}
       <label className="grid max-w-sm gap-1 text-sm font-medium">
         Search
         <input

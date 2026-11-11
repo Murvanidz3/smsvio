@@ -64,7 +64,13 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
   return payload as T;
 }
 
+export interface AuthConfig {
+  emailMode: 'disabled' | 'smtp';
+  google: boolean;
+}
+
 export const accountApi = {
+  config: () => api<AuthConfig>('/api/internal/auth/config'),
   session: () => api<SessionResponse>('/api/internal/auth/session'),
   signIn: (body: { email: string; password: string }) =>
     api<SessionResponse | { status: 'totp_required'; challenge: string }>(
@@ -74,7 +80,7 @@ export const accountApi = {
         body,
       },
     ),
-  totp: (body: { challenge: string; code: string }) =>
+  totp: (body: { challenge?: string; code: string }) =>
     api<SessionResponse>('/api/internal/auth/totp', { method: 'POST', body }),
   signUp: (body: { name: string; email: string; password: string; organizationName: string }) =>
     api<{ message: string }>('/api/internal/auth/signup', { method: 'POST', body }),
@@ -112,9 +118,12 @@ export const accountApi = {
     ),
   members: (query: string) => api<DirectoryResponse>(`/api/internal/members${query}`),
   invite: (body: { email: string; role: string }) =>
-    api<{ id: string; message: string }>('/api/internal/invitations', { method: 'POST', body }),
+    api<{ id: string; message: string; link?: string }>('/api/internal/invitations', {
+      method: 'POST',
+      body,
+    }),
   resendInvite: (id: string) =>
-    api<{ message: string }>(`/api/internal/invitations/${id}/resend`, {
+    api<{ message: string; link?: string }>(`/api/internal/invitations/${id}/resend`, {
       method: 'POST',
       body: {},
     }),
@@ -133,6 +142,13 @@ export const accountApi = {
       method: 'POST',
       body: { currentPassword, password },
     }),
+  setPassword: (password: string) =>
+    api<{ message: string }>('/api/internal/profile/password/set', {
+      method: 'POST',
+      body: { password },
+    }),
+  createOrganization: (name: string) =>
+    api<SessionResponse>('/api/internal/organization', { method: 'POST', body: { name } }),
   updateDetails: (body: { timezone: string; contactPhone: string }) =>
     api<SessionResponse>('/api/internal/profile/details', { method: 'PATCH', body }),
   startPhone: (phone: string) =>

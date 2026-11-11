@@ -72,6 +72,7 @@ export function presentAccount(
       accountPhoneE164: account.accountPhoneE164,
       accountPhoneVerifiedAt: account.accountPhoneVerifiedAt?.toISOString() ?? null,
       contactPhone: account.contactPhone,
+      hasPassword: account.passwordHash !== null,
     },
     session: { id: sessionId },
     organization:

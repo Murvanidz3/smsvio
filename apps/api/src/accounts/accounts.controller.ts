@@ -19,6 +19,7 @@ import {
   auditListQuerySchema,
   businessSettingsSchema,
   changePasswordSchema,
+  createOrganizationSchema,
   changeRoleSchema,
   deleteOrganizationSchema,
   detailsSchema,
@@ -30,12 +31,13 @@ import {
   phoneStartSchema,
   profileSchema,
   resetPasswordSchema,
+  setPasswordSchema,
   signInSchema,
   signupSchema,
   switchOrganizationSchema,
   tokenSchema,
-  totpChallengeSchema,
   totpCodeSchema,
+  TOTP_COOKIE,
   idParamSchema,
 } from '@smsvio/shared';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -64,6 +66,58 @@ function current(request: FastifyRequest): AuthState {
   return request.auth;
 }
 
+/** Public browser callback. The path is registered in Google Cloud Console and is not under /api. */
+@Controller('auth/google')
+export class GoogleCallbackController {
+  constructor(
+    private readonly auth: AuthService,
+    @Inject(API_ENV) private readonly env: ApiEnv,
+  ) {}
+
+  @Get('callback')
+  async callback(
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+    @Query() query: unknown,
+  ) {
+    const code = queryValue(query, 'code');
+    const state = queryValue(query, 'state');
+    if (queryValue(query, 'error') === 'access_denied') {
+      return await redirectAuthError(
+        reply,
+        this.env.PUBLIC_ORIGIN,
+        new ApiError(401, 'google_denied', 'cancelled'),
+      );
+    }
+    try {
+      const result = await this.auth.finishGoogle(code, state, clientInfo(request));
+      if (result.kind === 'totp') {
+        reply.setCookie(TOTP_COOKIE, result.challenge, {
+          path: '/',
+          sameSite: 'lax',
+          secure: cookieSecure(this.env.PUBLIC_ORIGIN),
+          httpOnly: true,
+          maxAge: 5 * 60,
+        });
+        return await sendRedirect(
+          reply,
+          new URL('/signin?totp=1', this.env.PUBLIC_ORIGIN).toString(),
+        );
+      }
+      applySessionCookies(
+        reply,
+        cookieSecure(this.env.PUBLIC_ORIGIN),
+        result.opened.sessionToken,
+        result.opened.csrfToken,
+        result.opened.organizationId,
+      );
+      return await sendRedirect(reply, new URL('/dashboard', this.env.PUBLIC_ORIGIN).toString());
+    } catch (error) {
+      return await redirectAuthError(reply, this.env.PUBLIC_ORIGIN, error);
+    }
+  }
+}
+
 @Controller('internal/auth')
 export class AuthController {
   constructor(
@@ -71,6 +125,25 @@ export class AuthController {
     private readonly teams: TeamService,
     @Inject(API_ENV) private readonly env: ApiEnv,
   ) {}
+
+  @Get('config')
+  config() {
+    return this.auth.authConfig();
+  }
+
+  @Get('google/start')
+  async googleStart(
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+    @Query() query: unknown,
+  ) {
+    try {
+      const location = await this.auth.beginGoogle(invitationQuery(query), clientInfo(request));
+      return await reply.code(302).header('location', location).send();
+    } catch (error) {
+      return await redirectAuthError(reply, this.env.PUBLIC_ORIGIN, error);
+    }
+  }
 
   @Post('signup')
   @HttpCode(200)
@@ -122,8 +195,15 @@ export class AuthController {
     @Res({ passthrough: true }) reply: FastifyReply,
     @Body() body: unknown,
   ) {
-    const input = parseInput(totpChallengeSchema, body);
-    const opened = await this.auth.completeTotp(input.challenge, input.code, clientInfo(request));
+    const challenge = totpChallenge(body, request.cookies[TOTP_COOKIE]);
+    const code = parseInput(totpCodeSchema, challenge.body).code;
+    reply.clearCookie(TOTP_COOKIE, {
+      path: '/',
+      sameSite: 'lax',
+      secure: cookieSecure(this.env.PUBLIC_ORIGIN),
+      httpOnly: true,
+    });
+    const opened = await this.auth.completeTotp(challenge.challenge, code, clientInfo(request));
     return this.establish(reply, opened);
   }
 
@@ -276,6 +356,17 @@ export class AccountController {
     return { status: 'ok' as const, message: 'Password updated.' };
   }
 
+  @Post('profile/password/set')
+  @HttpCode(200)
+  async setPassword(@Req() request: FastifyRequest, @Body() body: unknown) {
+    await this.auth.setPassword(
+      current(request),
+      parseInput(setPasswordSchema, body).password,
+      clientInfo(request),
+    );
+    return { status: 'ok' as const, message: 'Password saved.' };
+  }
+
   @Patch('profile/details')
   updateDetails(@Req() request: FastifyRequest, @Body() body: unknown) {
     return this.auth.updateDetails(current(request), parseInput(detailsSchema, body));
@@ -299,6 +390,26 @@ export class AccountController {
       parseInput(phoneConfirmSchema, body).code,
       clientInfo(request),
     );
+  }
+
+  @Post('organization')
+  @HttpCode(200)
+  async createOrganization(
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+    @Body() body: unknown,
+  ) {
+    const session = await this.teams.createOrganization(
+      current(request),
+      parseInput(createOrganizationSchema, body).name,
+      clientInfo(request),
+    );
+    applyOrganizationCookie(
+      reply,
+      cookieSecure(this.env.PUBLIC_ORIGIN),
+      session.organization?.id ?? null,
+    );
+    return session;
   }
 
   @Patch('organization')
@@ -416,4 +527,63 @@ export class AccountController {
     const parsed = parseInput(auditListQuerySchema, firstQueryValues(query));
     return this.teams.listAudit(current(request), parsed.page, parsed.pageSize);
   }
+}
+
+const AUTH_ERROR_CODES = new Set([
+  'google_unavailable',
+  'google_denied',
+  'google_email_unverified',
+  'google_conflict',
+  'invite_email_mismatch',
+  'invalid_state',
+  'invalid_link',
+]);
+
+function queryValue(query: unknown, key: string): string | undefined {
+  if (typeof query !== 'object' || query === null || !(key in query)) {
+    return undefined;
+  }
+  const value = (query as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function invitationQuery(query: unknown): string | undefined {
+  const token = queryValue(query, 'invitation');
+  return token !== undefined && token.length >= 20 && token.length <= 512 ? token : undefined;
+}
+
+function totpChallenge(
+  body: unknown,
+  cookie: string | undefined,
+): { challenge: string; body: unknown } {
+  const fromBody =
+    typeof body === 'object' &&
+    body !== null &&
+    'challenge' in body &&
+    typeof body.challenge === 'string'
+      ? body.challenge
+      : undefined;
+  const challenge = fromBody !== undefined && fromBody.length >= 20 ? fromBody : cookie;
+  if (challenge === undefined || challenge.length < 20) {
+    throw new ApiError(401, 'invalid_totp', 'That code is incorrect or has expired.');
+  }
+  return { challenge, body };
+}
+
+async function redirectAuthError(
+  reply: FastifyReply,
+  origin: string,
+  error: unknown,
+): Promise<FastifyReply> {
+  const code =
+    error instanceof ApiError && AUTH_ERROR_CODES.has(error.code)
+      ? error.code
+      : 'google_unavailable';
+  const url = new URL('/signin', origin);
+  url.searchParams.set('error', code);
+  return await sendRedirect(reply, url.toString());
+}
+
+async function sendRedirect(reply: FastifyReply, location: string): Promise<FastifyReply> {
+  return await reply.code(302).header('location', location).send();
 }

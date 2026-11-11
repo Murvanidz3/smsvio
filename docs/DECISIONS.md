@@ -12,7 +12,7 @@ with its reason. Newest phase last.
 | Server access     | The root password was used once to run `bootstrap.sh`; since then only SSH keys work.     |
 | Container images  | GHCR images are private.                                                                  |
 | Firewall          | UFW on the server only; the Hostinger panel firewall is not used.                         |
-| Local Docker      | Not installed on the development machine. Docker gates run in CI and on the VPS.          |
+| Local Docker      | Not installed on this machine, and localhost is not used. See section 14 of the spec.     |
 | Node.js           | Upgrade to the current LTS line (26.x).                                                   |
 | Phase 0 database  | Prisma baseline migration only. The demo login and real tables arrive in Phase 1.         |
 | Branding          | Original wordmark and palette designed in this phase (see below).                         |
@@ -135,9 +135,10 @@ with its reason. Newest phase last.
 - GHCR created the packages public on the first push because the repository is public. The owner
   switches them to private in the GitHub UI (there is no API for it); deploys work either way.
 - CI runs on pull requests and on `main`: lint, typecheck, unit tests with coverage thresholds,
-  build, shellcheck, production compose validation, integration tests, Playwright in four
-  projects, and a fresh-clone `docker compose up` smoke test. Images and the deploy run only on
-  `main` after all of those pass.
+  build, shellcheck, production compose validation, Postgres integration tests, Playwright
+  (light and dark, desktop and mobile, plus the Google projects), and a fresh-clone
+  `docker compose up` smoke test. The image and deploy jobs run only on `main`, and only when
+  the verify, integration, Playwright, and Compose smoke jobs have each succeeded.
 - The ACME contact address is the owner's git email (`murvanidzel@gmail.com`).
 - DNS for smsvio.com is hosted at Spaceship. When Phase 0 was built the `www` record did not
   exist yet; Caddy serves the redirect as soon as it resolves.
@@ -149,9 +150,9 @@ with its reason. Newest phase last.
 Spec section 16 asks for an SMTP host, port, username, password, from-address, and a platform
 admin email before Phase 1. None were provided. They are environment variables, not committed
 secrets. Local Compose sends mail through Mailpit (`axllent/mailpit:v1.27`) with no
-authentication. Production Compose requires `PUBLIC_ORIGIN`, `APP_ENCRYPTION_KEY`, `SMTP_HOST`,
-and `SMTP_FROM` (`:?`), so a deploy without them fails and rolls back. `SEED_ADMIN_EMAIL` is
-optional. The migrate container refuses `SEED_ADMIN_PASSWORD=smsvio-demo-local` when
+authentication. Production Compose requires `PUBLIC_ORIGIN` and `APP_ENCRYPTION_KEY`. SMTP
+settings are required only when `EMAIL_MODE=smtp`. `SEED_ADMIN_EMAIL` is optional. The migrate
+container refuses `SEED_ADMIN_PASSWORD=smsvio-demo-local` when
 `NODE_ENV=production`. The local migrate service sets `NODE_ENV=development` because the image
 itself sets `NODE_ENV=production`.
 
@@ -206,3 +207,40 @@ itself sets `NODE_ENV=production`.
 - `pnpm-workspace.yaml` `allowBuilds` now also includes `argon2` and `esbuild` (argon2 hashes
   passwords; esbuild is required by `react-email`). Do not run `pnpm approve` for the TanStack
   agent-skills notice.
+
+## Google sign-in and optional email (2026-11-11)
+
+- `EMAIL_MODE` is `disabled` or `smtp`, default `disabled`. The API boots with no SMTP settings
+  when email is disabled. `smtp` requires `SMTP_HOST` and `SMTP_FROM` and keeps the existing
+  verification, reset, and invitation mail. Switching mode does not require a code change.
+- When email is disabled, `/signup` shows Google only and a short note that email registration
+  is coming soon. `/signin` keeps the password form so existing passwords and the reset-link
+  command still work, and hides "Forgot your password?". Invitations return a one-time link to
+  the inviter instead of sending mail. Phone verification is hidden and the API refuses it until
+  SMS exists in Phase 3.
+- Google's browser redirect lands on `/auth/google/callback` (not under `/api`). Caddy sends
+  that path to the API. `pnpm dev` and Playwright proxy it the same way.
+- Google uses the authorization-code flow with PKCE (S256), `state`, and `nonce`. The ID token
+  is checked for issuer, audience, expiry, and nonce, and `email_verified` must be boolean true.
+  `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are both set or both empty. Empty hides the
+  button and the API still boots. Test-only endpoint overrides are ignored when
+  `NODE_ENV=production`.
+- A new Google user is email-verified, has no password, and names an organization on the
+  overview page. A verified account with the same email is linked and keeps its password and
+  sessions. An unverified account is linked, marked verified, its password is cleared, and its
+  sessions are revoked. A Google-only user sets a password later under Settings → Profile.
+  TOTP, when enabled, is still required after Google sign-in.
+- The platform admin is the account whose verified email equals `SEED_ADMIN_EMAIL`, whichever
+  way that person signs in. The flag is applied at sign-in, not only by the seed. When
+  `SEED_ADMIN_PASSWORD` is empty, migrate does not create a password user.
+- `users.passwordHash` is nullable. `users.googleSub` stores the Google subject.
+- The password-reset command prints the link to stdout for the operator. Tokens, links, and
+  codes are not written to application logs. Request logs already drop the query string, and
+  `set-cookie` stays redacted.
+
+### Where the quality gates run (2026-11-11)
+
+This machine does not have Docker and does not run a local stack. Before a phase is reported
+complete, lint, typecheck, unit tests, and `pnpm build` run here. Playwright, the Postgres
+integration tests, and the fresh-clone Compose smoke test run in GitHub Actions on every push
+to `main` and must pass there. The deploy job does not start unless all three succeed.

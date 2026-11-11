@@ -72,6 +72,7 @@ beforeAll(async () => {
       ...process.env,
       NODE_ENV: 'test',
       LOG_LEVEL: 'silent',
+      EMAIL_MODE: 'smtp',
       PUBLIC_ORIGIN: ORIGIN,
       APP_ENCRYPTION_KEY: process.env.APP_ENCRYPTION_KEY ?? 'ab'.repeat(32),
       SMTP_HOST: '127.0.0.1',

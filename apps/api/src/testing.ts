@@ -15,6 +15,7 @@ export const testEnv: ApiEnv = loadApiEnv({
   READINESS_TIMEOUT_MS: '200',
   PUBLIC_ORIGIN: 'http://localhost:3000',
   APP_ENCRYPTION_KEY: 'ab'.repeat(32),
+  EMAIL_MODE: 'smtp',
   SMTP_HOST: 'localhost',
   SMTP_FROM: 'SMSVIO <noreply@smsvio.test>',
   TRUST_PROXY_HOPS: '0',

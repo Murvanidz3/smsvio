@@ -1,10 +1,12 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type SubmitEvent, useEffect, useState } from 'react';
 
 import { AuthCard, fieldError, FormError, TextField } from '@/components/auth/fields';
+import { GoogleButton } from '@/components/auth/google-button';
 import { Button } from '@/components/ui/button';
 import { accountApi, ApiError } from '@/lib/api';
 
@@ -160,6 +162,7 @@ export function AcceptInviteForm() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [pending, setPending] = useState(false);
+  const config = useQuery({ queryKey: ['auth-config'], queryFn: () => accountApi.config() });
 
   useEffect(() => {
     if (token.length < 20) {
@@ -209,40 +212,49 @@ export function AcceptInviteForm() {
       {preview === null ? (
         <FormError error={error} />
       ) : (
-        <form className="grid gap-4" onSubmit={(event) => void onSubmit(event)}>
+        <div className="grid gap-4">
           <p className="text-sm">
             {preview.organizationName} invited {preview.email}.
           </p>
-          {preview.hasAccount ? null : (
-            <>
-              <TextField
-                label="Your name"
-                required
-                value={name}
-                error={fieldError(error, 'name')}
-                onChange={(event) => {
-                  setName(event.target.value);
-                }}
-              />
-              <TextField
-                label="Password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                error={fieldError(error, 'password')}
-                onChange={(event) => {
-                  setPassword(event.target.value);
-                }}
-              />
-            </>
+          {config.data?.google === true ? <GoogleButton invitation={token} /> : null}
+          {config.data?.emailMode === 'disabled' && !preview.hasAccount ? (
+            <p className="text-muted-foreground text-sm">
+              Continue with Google using {preview.email} to accept.
+            </p>
+          ) : (
+            <form className="grid gap-4" onSubmit={(event) => void onSubmit(event)}>
+              {preview.hasAccount || config.data?.emailMode === 'disabled' ? null : (
+                <>
+                  <TextField
+                    label="Your name"
+                    required
+                    value={name}
+                    error={fieldError(error, 'name')}
+                    onChange={(event) => {
+                      setName(event.target.value);
+                    }}
+                  />
+                  <TextField
+                    label="Password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    value={password}
+                    error={fieldError(error, 'password')}
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                    }}
+                  />
+                </>
+              )}
+              <FormError error={error} />
+              {notice === null ? null : <p className="text-sm">{notice}</p>}
+              <Button type="submit" className="h-10" disabled={pending}>
+                {pending ? 'Joining…' : 'Accept invitation'}
+              </Button>
+            </form>
           )}
-          <FormError error={error} />
-          {notice === null ? null : <p className="text-sm">{notice}</p>}
-          <Button type="submit" className="h-10" disabled={pending}>
-            {pending ? 'Joining…' : 'Accept invitation'}
-          </Button>
-        </form>
+        </div>
       )}
     </AuthCard>
   );

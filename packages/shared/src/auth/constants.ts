@@ -2,6 +2,8 @@
 export const SESSION_COOKIE = 'smsvio_session';
 export const CSRF_COOKIE = 'smsvio_csrf';
 export const ORGANIZATION_COOKIE = 'smsvio_org';
+/** Short-lived httpOnly cookie holding a TOTP challenge after a Google redirect. */
+export const TOTP_COOKIE = 'smsvio_totp';
 
 /** 30-day sliding session, as required by the spec. */
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;

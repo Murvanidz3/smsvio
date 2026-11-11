@@ -69,6 +69,7 @@ function ProfileTab() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [setup, setSetup] = useState<{ secret: string; qrDataUrl: string } | null>(null);
+  const hasPassword = session.data === undefined || session.data.user.hasPassword;
 
   return (
     <div className="grid gap-6">
@@ -102,8 +103,10 @@ function ProfileTab() {
         className="grid max-w-sm gap-3"
         onSubmit={(event) => {
           event.preventDefault();
-          void accountApi
-            .changePassword(currentPassword, password)
+          const save = hasPassword
+            ? accountApi.changePassword(currentPassword, password)
+            : accountApi.setPassword(password);
+          void save
             .then(() => {
               toast('Password updated.');
               setCurrentPassword('');
@@ -115,15 +118,22 @@ function ProfileTab() {
         }}
       >
         <h2 className="font-semibold">Password</h2>
-        <input
-          className="border-input h-10 rounded-lg border px-3"
-          type="password"
-          aria-label="Current password"
-          value={currentPassword}
-          onChange={(event) => {
-            setCurrentPassword(event.target.value);
-          }}
-        />
+        {hasPassword ? null : (
+          <p className="text-muted-foreground text-sm">
+            This account signs in with Google. You can add a password as well.
+          </p>
+        )}
+        {hasPassword ? (
+          <input
+            className="border-input h-10 rounded-lg border px-3"
+            type="password"
+            aria-label="Current password"
+            value={currentPassword}
+            onChange={(event) => {
+              setCurrentPassword(event.target.value);
+            }}
+          />
+        ) : null}
         <input
           className="border-input h-10 rounded-lg border px-3"
           type="password"
@@ -231,6 +241,7 @@ function DetailsTab() {
   const [contactPhone, setContactPhone] = useState(session.data?.user.contactPhone ?? '');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
+  const config = useQuery({ queryKey: ['auth-config'], queryFn: () => accountApi.config() });
 
   return (
     <div className="grid max-w-sm gap-6">
@@ -269,63 +280,67 @@ function DetailsTab() {
         />
         <Button type="submit">Save details</Button>
       </form>
-      <form
-        className="grid gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void accountApi
-            .startPhone(phone)
-            .then((result) => {
-              toast(result.message);
-            })
-            .catch((error: unknown) => {
-              toast(message(error));
-            });
-        }}
-      >
-        <h2 className="font-semibold">Account phone</h2>
-        <p className="text-muted-foreground text-sm">
-          {session.data?.user.accountPhoneE164 ?? 'Not confirmed.'} The code is emailed until
-          text-message delivery exists.
-        </p>
-        <input
-          className="border-input h-10 rounded-lg border px-3"
-          aria-label="Phone number"
-          placeholder="+14155550100"
-          value={phone}
-          onChange={(event) => {
-            setPhone(event.target.value);
-          }}
-        />
-        <Button type="submit" variant="outline">
-          Email me a code
-        </Button>
-      </form>
-      <form
-        className="grid gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void accountApi
-            .confirmPhone(code)
-            .then(async () => {
-              toast('Phone confirmed.');
-              await queryClient.invalidateQueries({ queryKey: ['session'] });
-            })
-            .catch((error: unknown) => {
-              toast(message(error));
-            });
-        }}
-      >
-        <input
-          className="border-input h-10 rounded-lg border px-3"
-          aria-label="Confirmation code"
-          value={code}
-          onChange={(event) => {
-            setCode(event.target.value);
-          }}
-        />
-        <Button type="submit">Confirm phone</Button>
-      </form>
+      {config.data?.emailMode === 'disabled' ? null : (
+        <>
+          <form
+            className="grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void accountApi
+                .startPhone(phone)
+                .then((result) => {
+                  toast(result.message);
+                })
+                .catch((error: unknown) => {
+                  toast(message(error));
+                });
+            }}
+          >
+            <h2 className="font-semibold">Account phone</h2>
+            <p className="text-muted-foreground text-sm">
+              {session.data?.user.accountPhoneE164 ?? 'Not confirmed.'} The code is emailed until
+              text-message delivery exists.
+            </p>
+            <input
+              className="border-input h-10 rounded-lg border px-3"
+              aria-label="Phone number"
+              placeholder="+14155550100"
+              value={phone}
+              onChange={(event) => {
+                setPhone(event.target.value);
+              }}
+            />
+            <Button type="submit" variant="outline">
+              Email me a code
+            </Button>
+          </form>
+          <form
+            className="grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void accountApi
+                .confirmPhone(code)
+                .then(async () => {
+                  toast('Phone confirmed.');
+                  await queryClient.invalidateQueries({ queryKey: ['session'] });
+                })
+                .catch((error: unknown) => {
+                  toast(message(error));
+                });
+            }}
+          >
+            <input
+              className="border-input h-10 rounded-lg border px-3"
+              aria-label="Confirmation code"
+              value={code}
+              onChange={(event) => {
+                setCode(event.target.value);
+              }}
+            />
+            <Button type="submit">Confirm phone</Button>
+          </form>
+        </>
+      )}
     </div>
   );
 }

@@ -117,23 +117,48 @@ ls -l .env   # must be -rw------- deploy
 | `SENTRY_ENVIRONMENT` | Environment tag sent to Sentry.                                  |
 | `DATABASE_POOL_MAX`  | Optional, default 10.                                            |
 
-Phase 1 adds keys the api refuses to start without. The file created above is from Phase 0, so
-edit the existing `/opt/smsvio/.env` (do not regenerate it) before deploying this release.
-A missing key makes the api exit and `deploy.sh` rolls back to the previous release.
+The api refuses to start without `PUBLIC_ORIGIN` and `APP_ENCRYPTION_KEY`. Edit the existing
+`/opt/smsvio/.env` (do not regenerate it) before deploying this release. A missing key makes
+the api exit and `deploy.sh` rolls back to the previous release.
 
-| Variable             | Meaning                                                                    |
-| -------------------- | -------------------------------------------------------------------------- |
-| `PUBLIC_ORIGIN`      | `https://smsvio.com`. Cookies and email links use this exact origin.       |
-| `APP_ENCRYPTION_KEY` | `openssl rand -hex 32` (64 hex characters). Encrypts TOTP secrets at rest. |
-| `SMTP_HOST`          | Outbound mail server.                                                      |
-| `SMTP_PORT`          | Default `587`. Port `465` uses implicit TLS.                               |
-| `SMTP_USER`          | Optional. Set together with `SMTP_PASSWORD`, or leave both empty.          |
-| `SMTP_PASSWORD`      | Optional. Set together with `SMTP_USER`.                                   |
-| `SMTP_FROM`          | From address, for example `SMSVIO <noreply@smsvio.com>`.                   |
+| Variable               | Meaning                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------- |
+| `PUBLIC_ORIGIN`        | `https://smsvio.com`. Cookies and links use this exact origin.                              |
+| `APP_ENCRYPTION_KEY`   | `openssl rand -hex 32` (64 hex characters). Encrypts TOTP secrets at rest.                  |
+| `EMAIL_MODE`           | `disabled` (default) or `smtp`. `disabled` boots with no mail server.                       |
+| `GOOGLE_CLIENT_ID`     | Optional. Set together with `GOOGLE_CLIENT_SECRET`, or leave both empty to hide Google.     |
+| `GOOGLE_CLIENT_SECRET` | Optional. Set together with `GOOGLE_CLIENT_ID`.                                             |
+| `SEED_ADMIN_EMAIL`     | Optional. The verified account with this email is the platform admin, however they sign in. |
+| `SMTP_HOST`            | Required only when `EMAIL_MODE=smtp`.                                                       |
+| `SMTP_PORT`            | Default `587`. Port `465` uses implicit TLS.                                                |
+| `SMTP_USER`            | Optional. Set together with `SMTP_PASSWORD`, or leave both empty.                           |
+| `SMTP_PASSWORD`        | Optional. Set together with `SMTP_USER`.                                                    |
+| `SMTP_FROM`            | Required only when `EMAIL_MODE=smtp`. For example `SMSVIO <noreply@smsvio.com>`.            |
 
-Leave `SEED_ADMIN_EMAIL` unset in production unless a real platform admin should be created on
-the next migration. The migrate container refuses `SEED_ADMIN_PASSWORD=smsvio-demo-local` when
-`NODE_ENV` is production, and it never changes the password of an account that already exists.
+The browser callback is `/auth/google/callback` on `PUBLIC_ORIGIN`. These are the URIs
+this app sends to Google:
+
+| Where                         | Redirect URI                                  |
+| ----------------------------- | --------------------------------------------- |
+| Production                    | `https://smsvio.com/auth/google/callback`     |
+| `dev.smsvio.com`              | `https://dev.smsvio.com/auth/google/callback` |
+| Local Compose (`HTTP_PORT`)   | `http://localhost:8080/auth/google/callback`  |
+| `pnpm dev` (web on port 3000) | `http://localhost:3000/auth/google/callback`  |
+
+When `EMAIL_MODE=disabled`, password reset is not emailed. Create a one-time link on the server
+and give it to the person. The command prints the link on your terminal and does not write it to
+the application log:
+
+```bash
+ssh smsvio
+cd /opt/smsvio
+./scripts/compose.sh exec -T api node dist/scripts/password-reset-link.js person@example.com
+```
+
+The migrate container refuses `SEED_ADMIN_PASSWORD=smsvio-demo-local` when `NODE_ENV` is
+production, and it never changes the password of an account that already exists. An empty
+`SEED_ADMIN_PASSWORD` skips password seeding; the verified `SEED_ADMIN_EMAIL` becomes the
+platform admin when that person signs in.
 
 ### 1.5 GitHub repository secrets
 

@@ -101,6 +101,14 @@ export const changePasswordSchema = z.object({
   password: newPasswordSchema,
 });
 
+export const setPasswordSchema = z.object({
+  password: newPasswordSchema,
+});
+
+export const createOrganizationSchema = z.object({
+  name: organizationName,
+});
+
 export const profileSchema = z.object({
   name: personName,
 });
