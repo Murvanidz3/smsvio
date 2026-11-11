@@ -52,7 +52,7 @@ FROM runtime AS migrate
 COPY --from=build /out/migrate ./
 ENV HOME=/tmp
 USER node
-CMD ["node_modules/.bin/prisma", "migrate", "deploy"]
+CMD ["node", "seed.mjs"]
 
 FROM runtime AS web
 COPY --from=build /out/web ./

@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from 'next/font/google';
 import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 
+import { Providers } from '@/components/providers';
 import { ThemeProvider } from '@/components/theme-provider';
 
 import './globals.css';
@@ -35,7 +36,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en" className={jakarta.variable} suppressHydrationWarning>
       <body className="min-h-dvh">
-        <ThemeProvider nonce={nonce}>{children}</ThemeProvider>
+        <ThemeProvider nonce={nonce}>
+          <Providers>{children}</Providers>
+        </ThemeProvider>
       </body>
     </html>
   );

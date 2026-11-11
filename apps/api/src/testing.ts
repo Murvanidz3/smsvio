@@ -13,6 +13,11 @@ export const testEnv: ApiEnv = loadApiEnv({
   DATABASE_URL: 'postgresql://smsvio:pw@postgres:5432/smsvio',
   REDIS_URL: 'redis://:pw@redis:6379',
   READINESS_TIMEOUT_MS: '200',
+  PUBLIC_ORIGIN: 'http://localhost:3000',
+  APP_ENCRYPTION_KEY: 'ab'.repeat(32),
+  SMTP_HOST: 'localhost',
+  SMTP_FROM: 'SMSVIO <noreply@smsvio.test>',
+  TRUST_PROXY_HOPS: '0',
 });
 
 export function createFakeDependencies() {
@@ -39,7 +44,7 @@ export async function createTestApp(deps: FakeDependencies): Promise<NestFastify
     .overrideProvider(REDIS)
     .useValue(deps.redis)
     .compile();
-  const app = configureApp(
+  const app = await configureApp(
     moduleRef.createNestApplication<NestFastifyApplication>(createFastifyAdapter(testEnv)),
   );
   await app.init();

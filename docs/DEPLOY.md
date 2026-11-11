@@ -117,6 +117,24 @@ ls -l .env   # must be -rw------- deploy
 | `SENTRY_ENVIRONMENT` | Environment tag sent to Sentry.                                  |
 | `DATABASE_POOL_MAX`  | Optional, default 10.                                            |
 
+Phase 1 adds keys the api refuses to start without. The file created above is from Phase 0, so
+edit the existing `/opt/smsvio/.env` (do not regenerate it) before deploying this release.
+A missing key makes the api exit and `deploy.sh` rolls back to the previous release.
+
+| Variable             | Meaning                                                                    |
+| -------------------- | -------------------------------------------------------------------------- |
+| `PUBLIC_ORIGIN`      | `https://smsvio.com`. Cookies and email links use this exact origin.       |
+| `APP_ENCRYPTION_KEY` | `openssl rand -hex 32` (64 hex characters). Encrypts TOTP secrets at rest. |
+| `SMTP_HOST`          | Outbound mail server.                                                      |
+| `SMTP_PORT`          | Default `587`. Port `465` uses implicit TLS.                               |
+| `SMTP_USER`          | Optional. Set together with `SMTP_PASSWORD`, or leave both empty.          |
+| `SMTP_PASSWORD`      | Optional. Set together with `SMTP_USER`.                                   |
+| `SMTP_FROM`          | From address, for example `SMSVIO <noreply@smsvio.com>`.                   |
+
+Leave `SEED_ADMIN_EMAIL` unset in production unless a real platform admin should be created on
+the next migration. The migrate container refuses `SEED_ADMIN_PASSWORD=smsvio-demo-local` when
+`NODE_ENV` is production, and it never changes the password of an account that already exists.
+
 ### 1.5 GitHub repository secrets
 
 In GitHub: **Settings → Secrets and variables → Actions → New repository secret**.
@@ -236,7 +254,7 @@ lives on the same disk is not a backup.
 
 ## 5. Rotating secrets
 
-Always edit `/opt/smsvio/.env` with `umask 077` and keep values hex-only.
+Always edit `/opt/smsvio/.env` with `umask 077`. Passwords and `APP_ENCRYPTION_KEY` stay hex-only.
 
 **Postgres password**
 
@@ -255,6 +273,12 @@ ssh smsvio && cd /opt/smsvio
 sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=$(openssl rand -hex 32)/" .env
 ./scripts/compose.sh up -d --wait redis api worker
 ```
+
+**Application encryption key**
+
+`APP_ENCRYPTION_KEY` encrypts TOTP secrets. Ciphertext is prefixed `v1.`. Replacing the key does
+not re-encrypt existing rows: those users must set up two-factor authentication again. Generate
+a replacement with `openssl rand -hex 32`, update `/opt/smsvio/.env`, and recreate the api.
 
 **CI deploy key**: generate a new key pair (section 1.2), append the new public key to
 `/home/deploy/.ssh/authorized_keys`, update the `VPS_SSH_KEY` secret, run a deploy, then delete the

@@ -9,7 +9,13 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.ts'],
       // Process entrypoints are exercised by the integration suite and the compose smoke test.
-      exclude: ['src/**/*.test.ts', 'src/testing.ts', 'src/main.ts', 'src/instrument.ts'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/testing.ts',
+        'src/memory-db.ts',
+        'src/main.ts',
+        'src/instrument.ts',
+      ],
       thresholds: { lines: 80, functions: 80, branches: 80, statements: 80 },
     },
   },

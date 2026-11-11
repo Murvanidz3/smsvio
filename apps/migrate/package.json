@@ -4,8 +4,13 @@
   "private": true,
   "description": "Runtime dependencies of the one-shot database migration container. The schema and migrations live in packages/db.",
   "type": "module",
-  "files": [],
+  "files": [
+    "seed.mjs"
+  ],
   "dependencies": {
+    "@smsvio/db": "workspace:*",
+    "@smsvio/shared": "workspace:*",
+    "argon2": "^0.45.2",
     "dotenv": "^18.0.10",
     "prisma": "7.10.1"
   }

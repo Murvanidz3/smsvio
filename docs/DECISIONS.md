@@ -141,3 +141,68 @@ with its reason. Newest phase last.
 - The ACME contact address is the owner's git email (`murvanidzel@gmail.com`).
 - DNS for smsvio.com is hosted at Spaceship. When Phase 0 was built the `www` record did not
   exist yet; Caddy serves the redirect as soon as it resolves.
+
+## Phase 1 — Accounts and shell (2026-11-11)
+
+### Inputs the spec asks for, and what was done instead
+
+Spec section 16 asks for an SMTP host, port, username, password, from-address, and a platform
+admin email before Phase 1. None were provided. They are environment variables, not committed
+secrets. Local Compose sends mail through Mailpit (`axllent/mailpit:v1.27`) with no
+authentication. Production Compose requires `PUBLIC_ORIGIN`, `APP_ENCRYPTION_KEY`, `SMTP_HOST`,
+and `SMTP_FROM` (`:?`), so a deploy without them fails and rolls back. `SEED_ADMIN_EMAIL` is
+optional. The migrate container refuses `SEED_ADMIN_PASSWORD=smsvio-demo-local` when
+`NODE_ENV=production`. The local migrate service sets `NODE_ENV=development` because the image
+itself sets `NODE_ENV=production`.
+
+### Accounts
+
+- Sessions are 256-bit tokens stored as SHA-256. The cookie `smsvio_session` is httpOnly.
+  `smsvio_csrf` is readable by the page (double submit). `smsvio_org` is httpOnly. All are
+  `SameSite=Lax`, path `/`, and `Secure` only when `PUBLIC_ORIGIN` is https. The session lasts
+  30 days and slides when fewer than 29 days remain. `lastSeenAt` updates at most every 5 minutes.
+- Cookie-authenticated mutations require a matching `Origin` and `x-csrf-token`. Sign-up,
+  sign-in, and password reset require `Origin` only. A resource that belongs to another
+  organization returns 404. A role that is too weak on the caller's own organization returns 403.
+- Passwords use argon2id at the OWASP minimum (`memoryCost` 19456, `timeCost` 2,
+  `parallelism` 1), shared as `ARGON2ID_OPTIONS`. Sign-in of an unknown email still hashes a
+  dummy password. Sign-up of an existing email returns the same "check your email" message.
+- TOTP uses `otpauth` with a window of one step (30 seconds). The pending secret is encrypted
+  until the user confirms a code. A code reuses a step only if its counter is greater than
+  `totpLastStep`. QR codes are data URLs, so the content security policy allows `img-src data:`.
+- Secrets at rest use AES-256-GCM. The stored form is `v1.<iv>.<tag>.<data>` (base64url) and the
+  key is `APP_ENCRYPTION_KEY` (64 hex characters). Replacing the key does not re-encrypt old rows.
+- Rate limits live in `RATE_LIMITS` and use a Redis sorted-set window under `smsvio:rl:`.
+  Responses are 429 with `Retry-After`. Emails in Redis keys are SHA-256, not the raw address.
+- Phone verification cannot send SMS until Phase 3. The one-time code is emailed to the verified
+  address, and the settings page says so. Numbers are checked with an E.164 regular expression;
+  libphonenumber arrives in Phase 2. Audit metadata stores a masked number. Five wrong attempts
+  invalidate the code.
+- New organizations are `PENDING_VERIFICATION`. Suspension does not block sign-in in this phase.
+  The banner links to Settings → Business. The sidebar only links to pages that exist: Overview,
+  Users, Settings, and `mailto:support@smsvio.com`.
+- The demo user is a platform admin and the owner of "SMSVIO Demo", so the dashboard works
+  before the admin console (Phase 6). The seed is idempotent: it sets the password only when it
+  creates the user, and it creates an organization only when that user has no memberships.
+- `AuthToken` is an extra table (not drawn in spec section 8) for verification, reset, and phone
+  codes. `dailySpendCapMicros` stays null until Phase 3. `messageRetentionDays` defaults to 365.
+  `smartEncoding` defaults to true and has no UI yet.
+- Deleting an organization writes the audit row with `organizationId` null, then deletes the
+  organization. An organization-scoped audit row would be removed by `ON DELETE CASCADE`.
+- Internal errors are `{ code, message, fields? }`. Unknown routes still return Nest's
+  `{ statusCode: 404 }` so the Phase 0 health tests stay valid. `ApiErrorFilter` is registered
+  after `SentryGlobalFilter` in `configureApp`: Nest reverses global filters and uses the first
+  match, and the Sentry filter matches every error.
+- `@tanstack/react-table` is installed but unused. Its v9 legacy API is deprecated, and the lint
+  rule treats deprecation as an error, so Users is a plain HTML table with server-side paging.
+  The command palette and toasts are custom. `cmdk` and `sonner` inject style tags that the nonce
+  content security policy rejects. `style-src-attr 'unsafe-inline'` stays, because Radix
+  positions components with element style attributes. `script-src` and `style-src` stay nonce-only.
+- The web app proxies `/api/*` to `API_INTERNAL_URL` with a route handler. Caddy already routes
+  `/api` in Compose and production, so that handler is unused there and returns 404 when the
+  variable is unset in production.
+- Tenant isolation is tested against real Postgres in `apps/api/test/tenant-isolation.int.test.ts`.
+  The unit suite uses an in-memory stand-in and does not count as integration coverage.
+- `pnpm-workspace.yaml` `allowBuilds` now also includes `argon2` and `esbuild` (argon2 hashes
+  passwords; esbuild is required by `react-email`). Do not run `pnpm approve` for the TanStack
+  agent-skills notice.

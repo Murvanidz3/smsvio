@@ -15,9 +15,14 @@ export const LOG_REDACT_PATHS = [
   'req.headers["x-csrf-token"]',
   'res.headers["set-cookie"]',
   '*.password',
+  '*.currentPassword',
+  '*.passwordHash',
   '*.token',
+  '*.challenge',
+  '*.code',
   '*.apiKey',
   '*.secret',
+  '*.totp',
 ] as const;
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{8,128}$/;

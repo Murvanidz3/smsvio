@@ -2,7 +2,14 @@ import { PrismaPg } from '@prisma/adapter-pg';
 
 import { PrismaClient } from './generated/prisma/client.js';
 
-export { Prisma, PrismaClient } from './generated/prisma/client.js';
+export {
+  AuthTokenPurpose,
+  MembershipRole,
+  MembershipStatus,
+  OrganizationStatus,
+  Prisma,
+  PrismaClient,
+} from './generated/prisma/client.js';
 
 export interface CreatePrismaClientOptions {
   readonly connectionString: string;

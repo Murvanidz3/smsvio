@@ -4,21 +4,22 @@ SMSVIO is a business SMS platform: one dashboard and one API for sending message
 repository holds the whole product — web app, API, background worker, database schema and the
 infrastructure that runs it at [smsvio.com](https://smsvio.com).
 
-The build follows the phases in [`docs/SPEC.md`](docs/SPEC.md). **Phase 0 (foundation)** is
-complete: monorepo, tooling, health endpoints, placeholder landing page, sign-in shell, Docker,
-CI/CD and production hosting.
+The build follows the phases in [`docs/SPEC.md`](docs/SPEC.md). **Phase 1 (accounts and shell)**
+is complete: sign-up, email verification, sign-in, password reset, two-factor authentication,
+sessions, organizations, invitations, the dashboard shell, users, settings, and the audit log.
+Phase 0 (foundation, Docker, CI/CD, and production hosting) remains underneath it.
 
 ## Repository layout
 
 ```
 apps/
-  web/        Next.js 16 app: landing page, sign-in, dashboard (from Phase 1)
+  web/        Next.js 16 app: landing page, accounts, and the dashboard shell
   api/        NestJS + Fastify REST API (/api/*, /healthz, /readyz)
   worker/     NestJS background worker (queues from Phase 2)
-  migrate/    Runtime dependencies of the one-shot migration container
+  migrate/    One-shot container: Prisma migrations, then the demo seed
 packages/
   config/     Shared ESLint, Prettier and TypeScript presets
-  shared/     Env validation, readiness checks and error helpers (zod)
+  shared/     Env validation, auth schemas, passwords, roles, and error helpers
   db/         Prisma schema, migrations and client factory
   server/     NestJS modules shared by api and worker: logging, Prisma, Redis, probes, Sentry
 infra/
@@ -43,7 +44,12 @@ docker compose up --build
 
 Open <http://localhost:8080>. Caddy routes `/api/*`, `/healthz` and `/readyz` to the api and
 everything else to the web app, exactly as in production. Migrations run automatically before
-the api and worker start. Check readiness with `curl http://localhost:8080/readyz`.
+the api and worker start, and the migrate container seeds the demo account. Check readiness
+with `curl http://localhost:8080/readyz`.
+
+Sign in at <http://localhost:8080/signin> with `admin@smsvio.test` / `smsvio-demo-local`.
+That password is for this local stack only; the production migrate container refuses it.
+Mailpit shows outbound mail at <http://localhost:8025>.
 
 ## Develop locally
 
@@ -57,7 +63,13 @@ pnpm dev                                 # web :3000, api :4000, worker (all wit
 
 `.env` is read by Docker Compose, by the api and worker in development and by Prisma. Every
 variable is documented in [`.env.example`](.env.example). The apps validate their environment at
-startup and exit with a list of the invalid keys.
+startup and exit with a list of the invalid keys. `PUBLIC_ORIGIN` in that file is
+`http://localhost:3000` for `pnpm dev`. Compose overrides it inside the api container so cookies
+match `http://localhost:8080`.
+
+`pnpm --filter @smsvio/db migrate:deploy` applies migrations only. `node apps/migrate/seed.mjs`
+applies migrations and then creates the demo account when `SEED_ADMIN_EMAIL` is set. It does not
+change the password of an account that already exists.
 
 Create a migration after changing `packages/db/prisma/schema.prisma`:
 
@@ -67,15 +79,15 @@ pnpm --filter @smsvio/db migrate:dev --name <change-name>
 
 ## Quality checks
 
-| Command                 | What it does                                                            |
-| ----------------------- | ----------------------------------------------------------------------- |
-| `pnpm lint`             | ESLint on every package (zero warnings) and Prettier check              |
-| `pnpm typecheck`        | Strict TypeScript across the workspace                                  |
-| `pnpm test`             | Unit tests with coverage thresholds                                     |
-| `pnpm test:integration` | API tests against real Postgres and Redis (`DATABASE_URL`, `REDIS_URL`) |
-| `pnpm test:e2e`         | Playwright: light and dark themes at desktop and mobile sizes           |
-| `pnpm build`            | Production build of every package                                       |
-| `pnpm format`           | Format the repository with Prettier                                     |
+| Command                 | What it does                                                          |
+| ----------------------- | --------------------------------------------------------------------- |
+| `pnpm lint`             | ESLint on every package (zero warnings) and Prettier check            |
+| `pnpm typecheck`        | Strict TypeScript across the workspace                                |
+| `pnpm test`             | Unit tests with coverage thresholds                                   |
+| `pnpm test:integration` | API tests against real Postgres and Redis, including tenant isolation |
+| `pnpm test:e2e`         | Playwright: light and dark themes at desktop and mobile sizes         |
+| `pnpm build`            | Production build of every package                                     |
+| `pnpm format`           | Format the repository with Prettier                                   |
 
 Install the Playwright browser once with `pnpm --filter @smsvio/web exec playwright install chromium`.
 The end-to-end tests fail on any browser console error or warning.

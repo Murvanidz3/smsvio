@@ -46,7 +46,7 @@ test.describe('sign-in shell', () => {
       'content',
       'noindex, nofollow',
     );
-    await page.getByRole('link', { name: 'Back to home' }).click();
+    await page.getByRole('link', { name: 'SMSVIO home' }).click();
     await expect(page).toHaveURL('/');
   });
 });

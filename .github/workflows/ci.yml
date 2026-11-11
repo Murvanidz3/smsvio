@@ -48,6 +48,9 @@ jobs:
           REDIS_PASSWORD: ci
           SITE_DOMAIN: example.com
           ACME_EMAIL: ops@example.com
+          APP_ENCRYPTION_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
+          SMTP_HOST: smtp.example.com
+          SMTP_FROM: SMSVIO <noreply@example.com>
         run: docker compose -f infra/docker-compose.prod.yml config --quiet
 
   integration:
@@ -74,6 +77,10 @@ jobs:
     env:
       DATABASE_URL: postgresql://smsvio:smsvio@localhost:5432/smsvio
       REDIS_URL: redis://localhost:6379/0
+      PUBLIC_ORIGIN: http://127.0.0.1:4000
+      APP_ENCRYPTION_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
+      SMTP_HOST: 127.0.0.1
+      SMTP_FROM: SMSVIO <noreply@smsvio.test>
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -87,6 +94,31 @@ jobs:
     name: Playwright (light and dark, desktop and mobile)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18.6-trixie
+        env:
+          POSTGRES_DB: smsvio
+          POSTGRES_USER: smsvio
+          POSTGRES_PASSWORD: smsvio
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U smsvio -d smsvio"
+          --health-interval 3s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:8.10.3-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://smsvio:smsvio@localhost:5432/smsvio
+      REDIS_URL: redis://localhost:6379/0
+      APP_ENCRYPTION_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
+      SEED_ADMIN_EMAIL: admin@smsvio.test
+      SEED_ADMIN_PASSWORD: smsvio-demo-local
+      SEED_ADMIN_NAME: SMSVIO Admin
+      SEED_ORG_NAME: SMSVIO Demo
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup

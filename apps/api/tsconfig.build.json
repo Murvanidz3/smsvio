@@ -2,7 +2,8 @@
   "extends": "@smsvio/config/tsconfig/nest.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "jsx": "react-jsx"
   },
   "include": ["src"],
   "exclude": ["**/*.test.ts", "src/testing.ts"]

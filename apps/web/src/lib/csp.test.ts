@@ -11,7 +11,13 @@ describe('buildCsp', () => {
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain('upgrade-insecure-requests');
-    expect(csp).not.toContain('unsafe-');
+    expect(csp).toContain("style-src-attr 'unsafe-inline'");
+    expect(csp.split('; ').find((directive) => directive.startsWith('script-src '))).not.toContain(
+      'unsafe-',
+    );
+    expect(csp.split('; ').find((directive) => directive.startsWith('style-src '))).not.toContain(
+      'unsafe-',
+    );
   });
 
   it('relaxes only what the development server needs', () => {

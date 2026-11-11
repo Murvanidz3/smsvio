@@ -25,12 +25,30 @@
     "test:integration": {
       "dependsOn": ["^build", "generate"],
       "cache": false,
-      "passThroughEnv": ["DATABASE_URL", "REDIS_URL"]
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "PUBLIC_ORIGIN",
+        "APP_ENCRYPTION_KEY",
+        "SMTP_HOST",
+        "SMTP_FROM"
+      ]
     },
     "test:e2e": {
-      "dependsOn": ["build"],
+      "dependsOn": ["build", "@smsvio/api#build"],
       "cache": false,
-      "passThroughEnv": ["PLAYWRIGHT_*", "E2E_BASE_URL"]
+      "passThroughEnv": [
+        "PLAYWRIGHT_*",
+        "E2E_BASE_URL",
+        "DATABASE_URL",
+        "REDIS_URL",
+        "SEED_ADMIN_EMAIL",
+        "SEED_ADMIN_PASSWORD",
+        "SEED_ADMIN_NAME",
+        "SEED_ORG_NAME",
+        "APP_ENCRYPTION_KEY",
+        "SMTP_FROM"
+      ]
     },
     "dev": {
       "dependsOn": ["^build", "generate"],

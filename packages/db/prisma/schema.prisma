@@ -8,8 +8,172 @@ generator client {
   moduleFormat           = "esm"
   generatedFileExtension = "ts"
   importFileExtension    = "js"
+  previewFeatures        = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [citext]
+}
+
+enum OrganizationStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  DEVELOPER
+  BILLING
+  VIEWER
+}
+
+enum MembershipStatus {
+  ACTIVE
+}
+
+enum AuthTokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  PHONE_VERIFICATION
+}
+
+model User {
+  id                     String    @id @default(uuid()) @db.Uuid
+  email                  String    @unique @db.Citext
+  passwordHash           String
+  name                   String
+  emailVerifiedAt        DateTime?
+  totpSecretEnc          String?
+  totpPendingSecretEnc   String?
+  totpEnabledAt          DateTime?
+  totpLastStep           Int?
+  isPlatformAdmin        Boolean   @default(false)
+  lastSeenAt             DateTime?
+  accountPhoneE164       String?
+  accountPhoneVerifiedAt DateTime?
+  contactPhone           String?
+  timezone               String    @default("UTC")
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  sessions     Session[]
+  memberships  Membership[]
+  invitations  Invitation[] @relation("InvitedBy")
+  authTokens   AuthToken[]
+  auditLogs    AuditLog[]   @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  ip        String?
+  userAgent String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Organization {
+  id                   String             @id @default(uuid()) @db.Uuid
+  name                 String
+  legalName            String?
+  status               OrganizationStatus @default(PENDING_VERIFICATION)
+  timezone             String             @default("UTC")
+  smartEncoding        Boolean            @default(true)
+  dailySpendCapMicros  BigInt?
+  messageRetentionDays Int                @default(365)
+  taxIdType            String?
+  taxId                String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  memberships Membership[]
+  invitations Invitation[]
+  auditLogs   AuditLog[]
+
+  @@index([status])
+  @@map("organizations")
+}
+
+model Membership {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @db.Uuid
+  organizationId String           @db.Uuid
+  role           MembershipRole
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+model Invitation {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @db.Uuid
+  email          String         @db.Citext
+  role           MembershipRole
+  tokenHash      String         @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  invitedById    String         @db.Uuid
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy      User           @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, email])
+  @@map("invitations")
+}
+
+model AuthToken {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  purpose   AuthTokenPurpose
+  tokenHash String           @unique
+  subject   String?
+  attempts  Int              @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("auth_tokens")
+}
+
+model AuditLog {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @db.Uuid
+  actorUserId    String?       @db.Uuid
+  action         String
+  targetType     String
+  targetId       String?
+  meta           Json?
+  ip             String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor          User?         @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([actorUserId])
+  @@map("audit_logs")
 }

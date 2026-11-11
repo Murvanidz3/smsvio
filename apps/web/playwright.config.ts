@@ -12,6 +12,8 @@ const viewports = {
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
   fullyParallel: true,
   forbidOnly: isCi,
   retries: isCi ? 1 : 0,
@@ -32,7 +34,11 @@ export default defineConfig({
         webServer: {
           command: 'node scripts/start-standalone.mjs',
           url: `${baseURL}/signin`,
-          env: { PORT: String(port), HOSTNAME: '127.0.0.1' },
+          env: {
+            PORT: String(port),
+            HOSTNAME: '127.0.0.1',
+            API_INTERNAL_URL: 'http://127.0.0.1:4010',
+          },
           reuseExistingServer: !isCi,
           timeout: 60_000,
         },
