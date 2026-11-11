@@ -65,6 +65,8 @@ model User {
   invitations  Invitation[] @relation("InvitedBy")
   authTokens   AuthToken[]
   auditLogs    AuditLog[]   @relation("AuditActor")
+  templates    Template[]
+  messages     Message[]
 
   @@map("users")
 }
@@ -103,6 +105,9 @@ model Organization {
   memberships Membership[]
   invitations Invitation[]
   auditLogs   AuditLog[]
+  contacts    Contact[]
+  templates   Template[]
+  messages    Message[]
 
   @@index([status])
   @@map("organizations")
@@ -177,4 +182,127 @@ model AuditLog {
   @@index([organizationId, createdAt])
   @@index([actorUserId])
   @@map("audit_logs")
+}
+
+enum TemplateCategory {
+  AUTHENTICATION
+  UTILITY
+  MARKETING
+}
+
+enum TemplateStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  UNDELIVERED
+  EXPIRED
+  FAILED
+  REJECTED
+}
+
+model Country {
+  iso2                 String   @id @db.Char(2)
+  name                 String
+  dialCode             String
+  alphaSenderAllowed   Boolean
+  registrationRequired Boolean
+  notes                String?
+  enabled              Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("countries")
+}
+
+model Contact {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  phoneE164      String
+  countryCode    String       @db.Char(2)
+  name           String?
+  attributes     Json         @default("{}")
+  optedOut       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, phoneE164])
+  @@index([organizationId, createdAt])
+  @@map("contacts")
+}
+
+model Template {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @db.Uuid
+  name            String
+  category        TemplateCategory
+  language        String
+  body            String
+  variables       Json             @default("{}")
+  status          TemplateStatus   @default(DRAFT)
+  rejectionReason String?
+  createdById     String           @db.Uuid
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy       User             @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  messages        Message[]
+
+  @@index([organizationId, createdAt])
+  @@map("templates")
+}
+
+model Message {
+  id                String           @id @default(uuid()) @db.Uuid
+  organizationId    String           @db.Uuid
+  direction         MessageDirection
+  to                String
+  fromSender        String           @map("from")
+  body              String
+  templateId        String?          @db.Uuid
+  templateVars      Json?
+  encoding          String
+  segments          Int
+  countryIso2       String?          @db.Char(2)
+  mccmnc            String?
+  status            MessageStatus
+  errorCode         String?
+  providerId        String?          @db.Uuid
+  providerMessageId String?
+  routeId           String?          @db.Uuid
+  priceMicros       BigInt?
+  costMicros        BigInt?
+  clientRef         String?
+  apiKeyId          String?          @db.Uuid
+  userId            String?          @db.Uuid
+  scheduledAt       DateTime?
+  queuedAt          DateTime?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  template          Template?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  user              User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, to])
+  @@unique([providerId, providerMessageId])
+  @@unique([organizationId, clientRef])
+  @@map("messages")
 }

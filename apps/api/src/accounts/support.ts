@@ -85,6 +85,7 @@ export function presentAccount(
             status: active.organization.status,
             role: active.role,
             timezone: active.organization.timezone,
+            smartEncoding: active.organization.smartEncoding,
             taxIdType: active.organization.taxIdType,
             taxId: active.organization.taxId,
           },

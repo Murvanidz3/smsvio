@@ -92,6 +92,7 @@ export default async function globalSetup(): Promise<void> {
         SMTP_FROM: process.env.SMTP_FROM ?? 'SMSVIO <noreply@smsvio.test>',
         MAIL_SINK_DIR: mailSinkDir,
         TRUST_PROXY_HOPS: '0',
+        AUTO_APPROVE_TEMPLATES: 'true',
       },
     });
     children.push(child);

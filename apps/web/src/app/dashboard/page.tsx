@@ -57,6 +57,18 @@ export default function OverviewPage() {
         </form>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
+        <Link href="/dashboard/templates" className="bg-card rounded-2xl border p-5">
+          <h2 className="font-semibold">Templates</h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Draft a message and submit it for review.
+          </p>
+        </Link>
+        <Link href="/dashboard/contacts" className="bg-card rounded-2xl border p-5">
+          <h2 className="font-semibold">Contacts</h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Keep the numbers your organization writes to.
+          </p>
+        </Link>
         <Link href="/dashboard/users" className="bg-card rounded-2xl border p-5">
           <h2 className="font-semibold">Users</h2>
           <p className="text-muted-foreground mt-1 text-sm">

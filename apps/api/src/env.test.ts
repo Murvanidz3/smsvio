@@ -38,6 +38,7 @@ describe('loadApiEnv', () => {
       GOOGLE_TOKEN_ENDPOINT: undefined,
       GOOGLE_JWKS_URI: undefined,
       GOOGLE_ISSUER: undefined,
+      AUTO_APPROVE_TEMPLATES: 'false',
     });
   });
 

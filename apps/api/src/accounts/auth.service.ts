@@ -6,7 +6,9 @@ import {
   RATE_LIMITS,
   TOTP_CHALLENGE_TTL_SECONDS,
   type SessionResponse,
+  smsErrorMessage,
 } from '@smsvio/shared';
+import { normalizePhone } from '@smsvio/shared/phone';
 import { AuthTokenPurpose, type PrismaClient } from '@smsvio/db';
 import { PRISMA, REDIS } from '@smsvio/server';
 import { Redis } from 'ioredis';
@@ -512,11 +514,15 @@ export class AuthService {
         'Verify your email before confirming a phone number.',
       );
     }
+    const parsed = normalizePhone(phone);
+    if (!parsed.ok) {
+      throw new ApiError(400, parsed.code, smsErrorMessage(parsed.code));
+    }
     const code = await issueToken(this.prisma, {
       userId: user.id,
       purpose: AuthTokenPurpose.PHONE_VERIFICATION,
       ttlMs: PHONE_CODE_TTL_MS,
-      subject: phone,
+      subject: parsed.phone.e164,
     });
     const rendered = await renderMessage(PhoneCodeEmail({ code }));
     await deliver(this.mailer, {

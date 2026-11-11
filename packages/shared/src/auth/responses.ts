@@ -28,6 +28,7 @@ export const sessionResponseSchema = z.object({
       status: z.enum(ORGANIZATION_STATUSES),
       role: roleSchema,
       timezone: z.string(),
+      smartEncoding: z.boolean(),
       taxIdType: z.string().nullable(),
       taxId: z.string().nullable(),
     })

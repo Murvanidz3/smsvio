@@ -86,6 +86,58 @@ interface AuthTokenRow {
   createdAt: Date;
 }
 
+interface ContactRow {
+  id: string;
+  organizationId: string;
+  phoneE164: string;
+  countryCode: string;
+  name: string | null;
+  attributes: unknown;
+  optedOut: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface TemplateRow {
+  id: string;
+  organizationId: string;
+  createdById: string | null;
+  name: string;
+  category: 'AUTHENTICATION' | 'UTILITY' | 'MARKETING';
+  language: string;
+  body: string;
+  variables: unknown;
+  status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface MessageRow {
+  id: string;
+  organizationId: string;
+  templateId: string | null;
+  to: string;
+  fromSender: string | null;
+  body: string;
+  direction: 'OUTBOUND' | 'INBOUND';
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface CountryRow {
+  iso2: string;
+  name: string;
+  dialCode: string;
+  alphaSenderAllowed: boolean;
+  registrationRequired: boolean;
+  notes: string | null;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 interface AuditRow {
   id: string;
   organizationId: string | null;
@@ -102,32 +154,98 @@ type Where = Record<string, unknown>;
 
 function matches(row: object, where: Where): boolean {
   for (const [key, expected] of Object.entries(where)) {
+    if (key === 'OR' && Array.isArray(expected)) {
+      if (!expected.some((item) => isWhere(item) && matches(row, item))) {
+        return false;
+      }
+      continue;
+    }
     const value = (row as Record<string, unknown>)[key];
     if (expected !== null && typeof expected === 'object' && !(expected instanceof Date)) {
-      const filter = expected as Record<string, unknown>;
-      if ('gt' in filter) {
-        if (
-          !(value instanceof Date) ||
-          !(filter.gt instanceof Date) ||
-          value.getTime() <= filter.gt.getTime()
-        ) {
-          return false;
-        }
-        continue;
+      if (!matchFilter(value, expected as Record<string, unknown>)) {
+        return false;
       }
-      if ('not' in filter) {
-        if (value === filter.not) {
-          return false;
-        }
-        continue;
-      }
-      return false;
+      continue;
     }
     if (value !== expected) {
       return false;
     }
   }
   return true;
+}
+
+function isWhere(value: unknown): value is Where {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function matchFilter(value: unknown, filter: Record<string, unknown>): boolean {
+  if ('gt' in filter) {
+    return (
+      value instanceof Date && filter.gt instanceof Date && value.getTime() > filter.gt.getTime()
+    );
+  }
+  if ('gte' in filter) {
+    return (
+      value instanceof Date && filter.gte instanceof Date && value.getTime() >= filter.gte.getTime()
+    );
+  }
+  if ('not' in filter) {
+    return value !== filter.not;
+  }
+  if ('in' in filter && Array.isArray(filter.in)) {
+    return filter.in.includes(value);
+  }
+  if ('contains' in filter && typeof filter.contains === 'string') {
+    return typeof value === 'string' && contains(value, filter.contains);
+  }
+  return false;
+}
+
+function pageOf<T>(rows: readonly T[], skip?: number, take?: number): T[] {
+  const start = skip ?? 0;
+  return rows.slice(start, start + (take ?? rows.length));
+}
+
+function byOrder<T extends object>(
+  rows: readonly T[],
+  orderBy?: Record<string, 'asc' | 'desc'>,
+): T[] {
+  const entry = orderBy === undefined ? undefined : Object.entries(orderBy)[0];
+  if (entry === undefined) {
+    return [...rows];
+  }
+  const [key, direction] = entry;
+  const factor = direction === 'desc' ? -1 : 1;
+  return [...rows].sort((left, right) => {
+    const a = (left as Record<string, unknown>)[key];
+    const b = (right as Record<string, unknown>)[key];
+    if (a instanceof Date && b instanceof Date) {
+      return (a.getTime() - b.getTime()) * factor;
+    }
+    if (typeof a === 'string' && typeof b === 'string') {
+      return a.localeCompare(b) * factor;
+    }
+    if (a === null || a === undefined) {
+      return factor;
+    }
+    if (b === null || b === undefined) {
+      return -factor;
+    }
+    return 0;
+  });
+}
+
+function projected<T extends object>(row: T, select?: Record<string, boolean>): T {
+  if (select === undefined) {
+    return row;
+  }
+  const copy: Record<string, unknown> = {};
+  for (const [key, enabled] of Object.entries(select)) {
+    if (enabled) {
+      copy[key] = (row as Record<string, unknown>)[key];
+    }
+  }
+  return copy as T;
 }
 
 function contains(value: string, fragment: string): boolean {
@@ -155,6 +273,10 @@ export function createMemoryDb() {
   const invitations = new Map<string, InvitationRow>();
   const tokens = new Map<string, AuthTokenRow>();
   const audits: AuditRow[] = [];
+  const contacts = new Map<string, ContactRow>();
+  const templates = new Map<string, TemplateRow>();
+  const messages = new Map<string, MessageRow>();
+  const countries = new Map<string, CountryRow>();
 
   function userByEmail(email: string): UserRow | null {
     return [...users.values()].find((user) => user.email === email) ?? null;
@@ -528,6 +650,189 @@ export function createMemoryDb() {
           Object.assign(row, data);
         }
         return Promise.resolve({ count: rows.length });
+      },
+    },
+    contact: {
+      count: ({ where }: { where?: Where }) =>
+        Promise.resolve([...contacts.values()].filter((row) => matches(row, where ?? {})).length),
+      findMany: ({
+        where,
+        orderBy,
+        skip,
+        take,
+        select,
+      }: {
+        where?: Where;
+        orderBy?: Record<string, 'asc' | 'desc'>;
+        skip?: number;
+        take?: number;
+        select?: Record<string, boolean>;
+      }) =>
+        Promise.resolve(
+          pageOf(
+            byOrder(
+              [...contacts.values()].filter((row) => matches(row, where ?? {})),
+              orderBy,
+            ),
+            skip,
+            take,
+          ).map((row) => projected(row, select)),
+        ),
+      findFirst: ({ where }: { where: Where }) =>
+        Promise.resolve([...contacts.values()].find((row) => matches(row, where)) ?? null),
+      create: ({
+        data,
+      }: {
+        data: Omit<ContactRow, 'id' | 'createdAt' | 'updatedAt' | 'optedOut' | 'attributes'> &
+          Partial<ContactRow>;
+      }) => {
+        const duplicate = [...contacts.values()].find(
+          (row) => row.organizationId === data.organizationId && row.phoneE164 === data.phoneE164,
+        );
+        if (duplicate !== undefined) {
+          uniqueConflict();
+        }
+        const row: ContactRow = {
+          attributes: {},
+          optedOut: false,
+          ...stamp(),
+          ...data,
+        };
+        contacts.set(row.id, row);
+        return Promise.resolve(row);
+      },
+      delete: ({ where }: { where: { id: string } }) => {
+        const row = contacts.get(where.id);
+        if (row === undefined) {
+          throw new Error(`missing contact ${where.id}`);
+        }
+        contacts.delete(where.id);
+        return Promise.resolve(row);
+      },
+    },
+    template: {
+      count: ({ where }: { where?: Where }) =>
+        Promise.resolve([...templates.values()].filter((row) => matches(row, where ?? {})).length),
+      findMany: ({
+        where,
+        orderBy,
+        skip,
+        take,
+      }: {
+        where?: Where;
+        orderBy?: Record<string, 'asc' | 'desc'>;
+        skip?: number;
+        take?: number;
+      }) =>
+        Promise.resolve(
+          pageOf(
+            byOrder(
+              [...templates.values()].filter((row) => matches(row, where ?? {})),
+              orderBy,
+            ),
+            skip,
+            take,
+          ),
+        ),
+      findFirst: ({ where }: { where: Where }) =>
+        Promise.resolve([...templates.values()].find((row) => matches(row, where)) ?? null),
+      create: ({
+        data,
+      }: {
+        data: Omit<TemplateRow, 'id' | 'createdAt' | 'updatedAt' | 'rejectionReason' | 'status'> &
+          Partial<TemplateRow>;
+      }) => {
+        const row: TemplateRow = {
+          status: 'DRAFT',
+          rejectionReason: null,
+          ...stamp(),
+          ...data,
+        };
+        templates.set(row.id, row);
+        return Promise.resolve(row);
+      },
+      update: ({ where, data }: { where: { id: string }; data: Partial<TemplateRow> }) => {
+        const row = templates.get(where.id);
+        if (row === undefined) {
+          throw new Error(`missing template ${where.id}`);
+        }
+        Object.assign(row, data, { updatedAt: new Date() });
+        return Promise.resolve(row);
+      },
+      delete: ({ where }: { where: { id: string } }) => {
+        const row = templates.get(where.id);
+        if (row === undefined) {
+          throw new Error(`missing template ${where.id}`);
+        }
+        templates.delete(where.id);
+        return Promise.resolve(row);
+      },
+    },
+    message: {
+      findMany: ({
+        where,
+        orderBy,
+        take,
+        select,
+      }: {
+        where?: Where;
+        orderBy?: Record<string, 'asc' | 'desc'>;
+        take?: number;
+        select?: Record<string, boolean>;
+      }) =>
+        Promise.resolve(
+          pageOf(
+            byOrder(
+              [...messages.values()].filter((row) => matches(row, where ?? {})),
+              orderBy,
+            ),
+            0,
+            take,
+          ).map((row) => projected(row, select)),
+        ),
+      create: ({
+        data,
+      }: {
+        data: Omit<MessageRow, 'id' | 'createdAt' | 'updatedAt' | 'templateId' | 'fromSender'> &
+          Partial<MessageRow>;
+      }) => {
+        const row: MessageRow = {
+          templateId: null,
+          fromSender: null,
+          ...stamp(),
+          ...data,
+        };
+        messages.set(row.id, row);
+        return Promise.resolve(row);
+      },
+    },
+    country: {
+      findMany: ({ where, orderBy }: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'> }) =>
+        Promise.resolve(
+          byOrder(
+            [...countries.values()].filter((row) => matches(row, where ?? {})),
+            orderBy,
+          ),
+        ),
+      create: ({
+        data,
+      }: {
+        data: Omit<CountryRow, 'createdAt' | 'updatedAt' | 'enabled' | 'notes'> &
+          Partial<CountryRow>;
+      }) => {
+        if (countries.has(data.iso2)) {
+          uniqueConflict();
+        }
+        const now = new Date();
+        const row: CountryRow = {
+          notes: null,
+          enabled: true,
+          createdAt: now,
+          updatedAt: now,
+          ...data,
+        };
+        countries.set(row.iso2, row);
+        return Promise.resolve(row);
       },
     },
     auditLog: {

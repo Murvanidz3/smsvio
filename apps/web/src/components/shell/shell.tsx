@@ -24,10 +24,22 @@ function readSidebarCollapsed(): boolean {
 }
 
 const NAV = [
-  { href: '/dashboard', label: 'Overview' },
-  { href: '/dashboard/users', label: 'Users' },
-  { href: '/dashboard/settings', label: 'Settings' },
+  { href: '/dashboard', label: 'Overview', group: 'Main' },
+  { href: '/dashboard/templates', label: 'Templates', group: 'Main' },
+  { href: '/dashboard/contacts', label: 'Contacts', group: 'Main' },
+  { href: '/dashboard/users', label: 'Users', group: 'Account' },
+  { href: '/dashboard/settings', label: 'Settings', group: 'Account' },
+  { href: '/dashboard/tools/number-lookup', label: 'Number lookup', group: 'Tools' },
 ] as const;
+
+const GROUPS = ['Main', 'Account', 'Tools'] as const;
+
+function isCurrent(pathname: string, href: string): boolean {
+  if (href === '/dashboard') {
+    return pathname === href;
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -65,7 +77,10 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   const data = session.data;
-  const crumb = NAV.find((item) => item.href === pathname)?.label ?? 'Dashboard';
+  const crumb =
+    NAV.filter((item) => isCurrent(pathname, item.href)).sort(
+      (left, right) => right.href.length - left.href.length,
+    )[0]?.label ?? 'Dashboard';
 
   return (
     <div className="flex min-h-dvh">
@@ -187,23 +202,31 @@ export function Shell({ children }: { children: ReactNode }) {
 
 function Nav({ pathname }: { pathname: string }) {
   return (
-    <nav className="grid gap-1 px-3" aria-label="Dashboard">
-      {NAV.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          aria-current={pathname === item.href ? 'page' : undefined}
-          className={`rounded-lg px-3 py-2 text-sm font-medium ${pathname === item.href ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'hover:bg-sidebar-accent'}`}
-        >
-          {item.label}
-        </Link>
+    <nav className="grid gap-4 px-3" aria-label="Dashboard">
+      {GROUPS.map((group) => (
+        <div key={group} className="grid gap-1">
+          <p className="text-muted-foreground px-3 text-xs font-semibold tracking-wide">{group}</p>
+          {NAV.filter((item) => item.group === group).map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={isCurrent(pathname, item.href) ? 'page' : undefined}
+              className={`rounded-lg px-3 py-2 text-sm font-medium ${isCurrent(pathname, item.href) ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'hover:bg-sidebar-accent'}`}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
       ))}
-      <a
-        className="hover:bg-sidebar-accent rounded-lg px-3 py-2 text-sm font-medium"
-        href="mailto:support@smsvio.com"
-      >
-        Support
-      </a>
+      <div className="grid gap-1">
+        <p className="text-muted-foreground px-3 text-xs font-semibold tracking-wide">Help</p>
+        <a
+          className="hover:bg-sidebar-accent rounded-lg px-3 py-2 text-sm font-medium"
+          href="mailto:support@smsvio.com"
+        >
+          Support
+        </a>
+      </div>
     </nav>
   );
 }
@@ -294,6 +317,12 @@ function Palette({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+}
+
+export function useCanMessage(): boolean {
+  const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
+  const role = session.data?.organization?.role;
+  return role !== undefined && roleAllows(role, 'messaging');
 }
 
 export function useCanManage(): boolean {

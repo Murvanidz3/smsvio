@@ -1,6 +1,6 @@
 const E164 = /^\+[1-9]\d{7,14}$/;
 
-/** E.164 with 8–15 digits. Full libphonenumber validation arrives with the SMS library. */
+/** Quick shape check for forms. Contacts and lookup confirm the number with libphonenumber. */
 export function isE164(value: string): boolean {
   return E164.test(value);
 }

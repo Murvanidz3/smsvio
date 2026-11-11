@@ -133,4 +133,66 @@ describe('tenant isolation against Postgres', () => {
       .send({ confirmName: `Bea ${stamp}` })
       .expect(200);
   });
+
+  it('hides another organization contacts and templates', async () => {
+    const stamp = Date.now().toString(36);
+    const suffix = String(Date.now() % 10000).padStart(4, '0');
+    const ada = await openAccount(`ada-catalog-${stamp}@example.com`, `Ada Catalog ${stamp}`);
+    const bea = await openAccount(`bea-catalog-${stamp}@example.com`, `Bea Catalog ${stamp}`);
+
+    const contact = await ada.agent
+      .post('/api/internal/contacts')
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', ada.csrf)
+      .send({ phone: `+1415555${suffix}`, name: 'Ada' })
+      .expect(200);
+    const template = await ada.agent
+      .post('/api/internal/templates')
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', ada.csrf)
+      .send({
+        name: 'Isolation note',
+        category: 'UTILITY',
+        language: 'en',
+        body: 'Hello from the catalog test.',
+      })
+      .expect(200);
+    const contactId = String(record(contact.body).id);
+    const templateId = String(record(template.body).id);
+
+    await bea.agent.get(`/api/internal/contacts/${contactId}`).expect(404);
+    await bea.agent
+      .delete(`/api/internal/contacts/${contactId}`)
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', bea.csrf)
+      .expect(404);
+    await bea.agent.get(`/api/internal/templates/${templateId}`).expect(404);
+    await bea.agent
+      .patch(`/api/internal/templates/${templateId}`)
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', bea.csrf)
+      .send({ category: 'MARKETING', language: 'en', body: 'Changed. Reply STOP to opt out.' })
+      .expect(404);
+    await bea.agent
+      .delete(`/api/internal/templates/${templateId}`)
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', bea.csrf)
+      .expect(404);
+
+    const stillThere = await ada.agent.get(`/api/internal/contacts/${contactId}`).expect(200);
+    expect(record(stillThere.body).name).toBe('Ada');
+
+    await ada.agent
+      .post('/api/internal/organization/delete')
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', ada.csrf)
+      .send({ confirmName: `Ada Catalog ${stamp}` })
+      .expect(200);
+    await bea.agent
+      .post('/api/internal/organization/delete')
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', bea.csrf)
+      .send({ confirmName: `Bea Catalog ${stamp}` })
+      .expect(200);
+  });
 });

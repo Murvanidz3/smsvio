@@ -59,6 +59,14 @@ export const apiEnvSchema = z
      * Used by the end-to-end tests. Production refuses to start if it is set.
      */
     MAIL_SINK_DIR: optionalEnv(z.string().min(1)),
+    /**
+     * When true, submitting a template approves it. Otherwise it waits for an operator.
+     * The admin review queue arrives in a later phase.
+     */
+    AUTO_APPROVE_TEMPLATES: z.preprocess(
+      (value) => (value === '' || value === undefined ? 'false' : value),
+      z.enum(['true', 'false']),
+    ),
   })
   .superRefine((value, ctx) => {
     if ((value.SMTP_USER === undefined) !== (value.SMTP_PASSWORD === undefined)) {

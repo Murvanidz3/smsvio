@@ -39,6 +39,8 @@ export const RATE_LIMITS = {
   totpIp: { limit: 15, windowMs: 15 * 60 * 1000 },
   totpAccount: { limit: 10, windowMs: 15 * 60 * 1000 },
   phoneIp: { limit: 10, windowMs: 60 * 60 * 1000 },
+  /** Number lookup is computed locally, but it is still limited per signed-in user. */
+  lookupUser: { limit: 30, windowMs: 60 * 1000 },
 } as const;
 
 export const MEMBERSHIP_ROLES = ['OWNER', 'ADMIN', 'DEVELOPER', 'BILLING', 'VIEWER'] as const;
