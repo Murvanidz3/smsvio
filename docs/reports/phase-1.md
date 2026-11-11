@@ -17,7 +17,13 @@ the audit log, phone and contact details, and business details. Every sensitive 
 audit row. Any member can read the organization's audit list.
 
 The local stack seeds `admin@smsvio.test` / `smsvio-demo-local` in an organization named
-SMSVIO Demo and captures mail in Mailpit.
+SMSVIO Demo and captures mail in Mailpit when `EMAIL_MODE=smtp`.
+
+Google sign-in uses the authorization-code flow with PKCE. The browser returns to
+`/auth/google/callback`. With `EMAIL_MODE=disabled`, `/signup` is Google only, invitations
+return a one-time link instead of an email, and phone verification is refused. `/signin` keeps
+the password form. The verified address in `SEED_ADMIN_EMAIL` becomes the platform admin at
+sign-in. An empty `SEED_ADMIN_PASSWORD` does not create a password user.
 
 ## How to verify
 
@@ -30,38 +36,29 @@ pnpm test
 pnpm build
 ```
 
-Integration tests and Playwright need Postgres and Redis. They run in CI. On a machine with
-Docker they also run locally:
+This development machine does not run Docker or a local stack. Lint, typecheck, unit tests, and
+`pnpm build` were run here and passed. Playwright, the Postgres integration tests, and the
+fresh-clone Compose smoke test run in GitHub Actions. They must pass before a phase is complete,
+and the deploy does not start unless all three succeed.
 
-```bash
-cp .env.example .env
-docker compose up -d postgres redis
-pnpm test:integration
-pnpm test:e2e
-```
+Playwright covers demo sign-in, Users, Settings, the command palette, email sign-up, and Google
+sign-in against a local mock. Each test fails on a browser console error or warning. Projects
+are desktop and mobile, light and dark, plus Google on desktop light and mobile dark.
 
-Playwright starts the built API on `127.0.0.1:4010`, seeds the demo account, and opens the web
-app on `127.0.0.1:3100`. It covers demo sign-in, Users, Settings, the command palette, and a
-sign-up that reads the verification link from the mail sink. Each test fails on a browser
-console error or warning. The four projects are desktop and mobile, light and dark.
-
-The fresh-clone gate is `cp .env.example .env && docker compose up --build --wait`, then
-sign in at `http://localhost:8080/signin` with the demo account. Mail is at
-`http://localhost:8025`. This machine does not have Docker, so that gate was not run here. CI
-runs `docker compose up --wait` from `.env.example`.
-
-Production images will not become ready until `/opt/smsvio/.env` contains `PUBLIC_ORIGIN`,
-`APP_ENCRYPTION_KEY`, `SMTP_HOST`, and `SMTP_FROM`. `deploy.sh` rolls back when `/readyz` fails.
-Do not deploy this phase until those values are set. See `docs/DEPLOY.md`.
+[CI run 43003460111](https://github.com/Murvanidz3/smsvio/actions/runs/43003460111) on `936fb77`
+passed all six jobs, including the production deploy. `https://smsvio.com/readyz` returns
+`{"status":"ok"}`. `https://smsvio.com/signin` shows **Continue with Google**, and
+`/api/internal/auth/config` returns `emailMode: disabled` and `google: true`. The password form
+stays on the sign-in page. "Forgot your password?" is hidden.
 
 ## Decisions
 
 Recorded in `docs/DECISIONS.md` under Phase 1. The ones that change how the product behaves:
 
-- SMTP credentials and the platform admin email were not supplied. They are environment
-  variables. Local mail goes to Mailpit. Production fails fast without the required keys.
+- Production runs with `EMAIL_MODE=disabled`. SMTP is required only when the mode is `smtp`.
   The local demo password is refused when `NODE_ENV` is production.
-- Phone verification emails the code. The UI says so. SMS does not exist until Phase 3.
+- Google sign-in, the public callback path, and the platform-admin email are recorded in
+  `docs/DECISIONS.md`. Phone verification is hidden until SMS exists in Phase 3.
 - The shell links only to Overview, Users, Settings, and support mail. The verification banner
   opens Settings → Business. There is no placeholder compliance page and no fake metric.
 - Internal errors are `{ code, message, fields? }`. Nest's 404 body for unknown routes is
@@ -86,9 +83,9 @@ Recorded in `docs/DECISIONS.md` under Phase 1. The ones that change how the prod
 - `@tanstack/react-table` and `cmdk` are installed and unused.
 - A membership status other than `ACTIVE` does not exist yet, so suspension of a member is not
   represented.
-- Playwright and the Compose smoke test were not executed on this development machine because
-  Docker and a local Postgres are not installed. The API unit suite, including the in-memory
-  two-organization cases, was run here.
+- Playwright, the Postgres integration tests, and the Compose smoke test are not run on this
+  development machine. They passed in GitHub Actions on `936fb77`. The API unit suite was run
+  here.
 
 ## What Phase 2 needs to know
 
@@ -102,10 +99,13 @@ Recorded in `docs/DECISIONS.md` under Phase 1. The ones that change how the prod
 - Password hashing must keep using `ARGON2ID_OPTIONS`. Encryption of new secrets must keep the
   `v1.` prefix and `APP_ENCRYPTION_KEY`.
 - Rate-limit keys are `smsvio:rl:` plus a hash, not a raw email address.
-- The phone-verification email is the stand-in for SMS. Phase 3 should replace the delivery
-  in `startPhone` / `confirmPhone` and the settings copy, not the code-attempt counter.
+- While `EMAIL_MODE=disabled`, `startPhone` returns 403 `phone_unavailable`. Phase 3 should
+  replace that refusal and the settings copy, not the code-attempt counter.
 - `messageRetentionDays`, `dailySpendCapMicros`, and `smartEncoding` are already columns.
 - The web content security policy allows `style-src-attr 'unsafe-inline'` and forbids injected
   style and script tags. Do not add a library that inserts either.
-- Production `/opt/smsvio/.env` still needs the Phase 1 keys before the next deploy. Local
-  Compose sets `NODE_ENV=development` on the migrate service on purpose.
+- Production `/opt/smsvio/.env` already has `PUBLIC_ORIGIN`, `APP_ENCRYPTION_KEY`,
+  `EMAIL_MODE=disabled`, the Google client, and `SEED_ADMIN_EMAIL`. Do not regenerate that
+  file. Local Compose sets `NODE_ENV=development` on the migrate service on purpose.
+- Google's redirect URI is `/auth/google/callback` on `PUBLIC_ORIGIN`. Caddy proxies that path
+  to the API. The callback is excluded from the `/api` prefix.
