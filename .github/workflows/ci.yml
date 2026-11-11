@@ -261,8 +261,9 @@ jobs:
       - name: Upload release files
         run: |
           ssh vps 'mkdir -p /opt/smsvio/scripts'
-          scp infra/docker-compose.prod.yml vps:/opt/smsvio/docker-compose.prod.yml
-          scp infra/scripts/deploy.sh infra/scripts/compose.sh infra/scripts/rollback.sh vps:/opt/smsvio/scripts/
+          # -O is the legacy SCP protocol. The deploy key's forced command accepts scp -t and rejects SFTP.
+          scp -O infra/docker-compose.prod.yml vps:/opt/smsvio/docker-compose.prod.yml
+          scp -O infra/scripts/deploy.sh infra/scripts/compose.sh infra/scripts/rollback.sh vps:/opt/smsvio/scripts/
           ssh vps 'chmod 0755 /opt/smsvio/scripts/*.sh'
 
       - name: Log the server in to GHCR
@@ -296,4 +297,4 @@ jobs:
 
       - name: Roll back when the public check fails
         if: failure() && steps.verify.outcome == 'failure'
-        run: ssh vps '/opt/smsvio/scripts/rollback.sh'
+        run: ssh vps '/opt/smsvio/scripts/rollback.sh --rollback'

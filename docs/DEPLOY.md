@@ -20,6 +20,7 @@ Internet ──► Caddy :80/:443 (TLS, www → apex, security headers)
 | Production secrets | `/opt/smsvio/.env` (mode 0600, never committed)                   |
 | Active release     | `/opt/smsvio/.release.env`; history in `/opt/smsvio/releases.log` |
 | Scripts            | `/opt/smsvio/scripts/{deploy,rollback,compose}.sh` (copied by CI) |
+| Deploy-key guard   | `/usr/local/sbin/smsvio-ssh-guard` (root-owned, not copied by CI) |
 
 Root login and password login are disabled. If you lose the `deploy` SSH keys, use the Hostinger
 VPS recovery console.
@@ -51,8 +52,9 @@ ssh-keygen -t ed25519 -C smsvio-github-actions -f ~/.ssh/smsvio_ci_deploy -N ""
 cat ~/.ssh/id_ed25519_smsvio.pub ~/.ssh/smsvio_ci_deploy.pub > smsvio_deploy_keys.pub
 ```
 
-The first key is for people, the second for GitHub Actions. Both become `deploy`'s authorized
-keys.
+The first key is for people. It stays a normal login, so an admin can still open a shell and
+roll back by hand. The second key is for GitHub Actions. After bootstrap, section 1.3 restricts
+that key to `/usr/local/sbin/smsvio-ssh-guard`. It cannot open a shell.
 
 ### 1.3 Bootstrap the server
 
@@ -62,9 +64,15 @@ security upgrades, UTC, Docker Engine and Compose from Docker's repository, Dock
 a 2 GB swap file when RAM is 4 GB or less, and `/opt/smsvio`.
 
 ```bash
-scp infra/scripts/bootstrap.sh smsvio_deploy_keys.pub root@179.67.196.35:/root/
-ssh root@179.67.196.35 'DEPLOY_SSH_KEYS_FILE=/root/smsvio_deploy_keys.pub bash /root/bootstrap.sh && rm /root/smsvio_deploy_keys.pub'
+scp infra/scripts/bootstrap.sh infra/scripts/ssh-guard.sh infra/scripts/install-ssh-guard.sh \
+  smsvio_deploy_keys.pub root@179.67.196.35:/root/
+ssh root@179.67.196.35 'DEPLOY_SSH_KEYS_FILE=/root/smsvio_deploy_keys.pub bash /root/bootstrap.sh && bash /root/install-ssh-guard.sh && rm /root/smsvio_deploy_keys.pub'
 ```
+
+`install-ssh-guard.sh` copies the guard to `/usr/local/sbin/smsvio-ssh-guard` (mode `0755`, owner
+`root`) and rewrites only the `smsvio-github-actions` line in `authorized_keys` so sshd always
+runs that script. A previous copy of the file is kept at
+`/home/deploy/.ssh/authorized_keys.bak`.
 
 Then, from a **new** terminal, confirm key login works before closing the root session:
 
@@ -192,8 +200,10 @@ docker logout ghcr.io; docker pull ghcr.io/murvanidz3/smsvio-web:<sha>   # expec
 ### 1.6 First deploy
 
 Push to `main` (or run the **CI** workflow manually from the Actions tab). The `deploy` job copies
-`infra/docker-compose.prod.yml` and the scripts to `/opt/smsvio`, then runs
-`scripts/deploy.sh <sha>`, which:
+`infra/docker-compose.prod.yml` and the scripts to `/opt/smsvio` with `scp -O` (the legacy SCP
+protocol; the deploy key rejects SFTP), then runs `scripts/deploy.sh <sha>`. The guard on the
+server runs first and refuses the release when it is older than the one already live. `deploy.sh`
+then:
 
 1. writes `.release.env` with the new release and pulls its images;
 2. runs `docker compose up --wait`: Postgres and Redis become healthy, `migrate` applies pending
@@ -236,15 +246,48 @@ the server (the last three).
 ## 3. Rolling back
 
 Automatic: `deploy.sh` redeploys the previous release when the new one fails its readiness
-check, and the workflow runs `rollback.sh` when the public check fails after a deploy.
+check. That path does not open a second SSH connection, so the age check does not see it. When
+the public check fails after a deploy that did start, the workflow runs
+`rollback.sh --rollback`. The guard allows that flag and skips the age check.
 
-Manual:
+Manual, from the admin key (this key is not forced through the guard):
 
 ```bash
 ssh smsvio
 /opt/smsvio/scripts/rollback.sh              # back to the release before the current one
 /opt/smsvio/scripts/rollback.sh <git-sha>    # or to a specific earlier release
 cat /opt/smsvio/releases.log                 # deploy history: <UTC time> <sha>
+```
+
+The CI key can do the same only by passing `--rollback`:
+
+```bash
+ssh -i ~/.ssh/smsvio_ci_deploy deploy@179.67.196.35 '/opt/smsvio/scripts/rollback.sh --rollback'
+ssh -i ~/.ssh/smsvio_ci_deploy deploy@179.67.196.35 '/opt/smsvio/scripts/deploy.sh <git-sha> --rollback'
+```
+
+### 3.1 Refusing an older release
+
+A queued GitHub Actions run keeps the workflow file from its own commit. Adding a check to the
+current workflow does not stop a run that was queued earlier. The guard is on the server, and
+the CI key cannot replace it or skip it.
+
+For `deploy.sh <sha>` with no `--rollback`, the guard reads `APP_RELEASE` from
+`/opt/smsvio/.release.env` and asks the public GitHub API whether `<sha>` is an ancestor of the
+live release or has an earlier committer time. Either one is refused. The same sha is allowed.
+Anything else is allowed only when it is not older. If the API cannot be read, the deploy is
+refused. An empty `.release.env` (the first deploy) is allowed.
+
+The CI key may only run these commands: `mkdir -p /opt/smsvio/scripts`,
+`chmod 0755 /opt/smsvio/scripts/*.sh`, `docker login` and `docker logout` for `ghcr.io`,
+`scp -t`/`scp -f` of `docker-compose.prod.yml` and the three scripts, `deploy.sh <sha>`,
+`deploy.sh <sha> --rollback`, and `rollback.sh --rollback`.
+
+Reinstall the guard from a current checkout after changing it. CI never copies this file.
+
+```bash
+scp infra/scripts/ssh-guard.sh infra/scripts/install-ssh-guard.sh smsvio:/tmp/
+ssh smsvio 'sudo bash /tmp/install-ssh-guard.sh && rm /tmp/ssh-guard.sh /tmp/install-ssh-guard.sh'
 ```
 
 Rollbacks do not undo database migrations. Migrations must stay backward compatible with the
@@ -305,9 +348,11 @@ sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=$(openssl rand -hex 32)/" .env
 not re-encrypt existing rows: those users must set up two-factor authentication again. Generate
 a replacement with `openssl rand -hex 32`, update `/opt/smsvio/.env`, and recreate the api.
 
-**CI deploy key**: generate a new key pair (section 1.2), append the new public key to
-`/home/deploy/.ssh/authorized_keys`, update the `VPS_SSH_KEY` secret, run a deploy, then delete the
-old public key line from `authorized_keys`.
+**CI deploy key**: generate a new key pair (section 1.2). Give the public key the comment
+`smsvio-github-actions`, append it to `/home/deploy/.ssh/authorized_keys`, then run
+`install-ssh-guard.sh` so the new line is forced through the guard. Update the `VPS_SSH_KEY`
+secret, run a deploy, then delete the old public key line. The guard script expects exactly one
+key with that comment.
 
 **Admin key**: same procedure; keep one working session open until the new key is verified.
 

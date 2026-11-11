@@ -252,9 +252,10 @@ function AdjustDialog({
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4">
+    <div className="fixed inset-0 z-50 grid place-items-center px-4">
+      <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
       <form
-        className="bg-popover w-full max-w-md rounded-xl border p-5"
+        className="bg-popover relative z-10 w-full max-w-md rounded-xl border p-5"
         role="dialog"
         aria-labelledby="adjust-title"
         onSubmit={(event) => {
@@ -303,7 +304,7 @@ function AdjustDialog({
             required
           />
         </label>
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="relative z-10 mt-5 flex shrink-0 justify-end gap-2">
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>

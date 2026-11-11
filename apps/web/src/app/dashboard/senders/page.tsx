@@ -189,9 +189,10 @@ export default function SendersPage() {
         </table>
       </div>
       {adding ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4">
+        <div className="fixed inset-0 z-50 grid place-items-center px-4">
+          <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
           <div
-            className="bg-popover w-full max-w-md rounded-xl border p-5"
+            className="bg-popover relative z-10 w-full max-w-md rounded-xl border p-5"
             role="dialog"
             aria-labelledby="add-country-title"
           >
@@ -210,7 +211,7 @@ export default function SendersPage() {
               />
             </label>
             <ul
-              className="mt-2 grid max-h-40 gap-1 overflow-y-auto"
+              className="mt-2 grid max-h-[min(10rem,28dvh)] gap-1 overflow-y-auto"
               role="listbox"
               aria-label="Matching countries"
             >
@@ -235,7 +236,7 @@ export default function SendersPage() {
             <p className="text-muted-foreground mt-3 text-sm">
               New countries use the shared platform number until you have an approved sender.
             </p>
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="relative z-10 mt-5 flex shrink-0 justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
