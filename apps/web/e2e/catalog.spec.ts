@@ -34,8 +34,10 @@ test.describe('catalog', () => {
     await expect(page.getByRole('heading', { name: 'Contacts', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Create contact' }).click();
     const create = page.getByRole('dialog', { name: 'Create contact' });
-    await create.getByLabel('Phone').fill(phone);
-    await create.getByLabel('Name').fill(`Catalog ${testInfo.project.name}`);
+    await create.getByRole('textbox', { name: 'Phone', exact: true }).fill(phone);
+    await create
+      .getByRole('textbox', { name: 'Name', exact: true })
+      .fill(`Catalog ${testInfo.project.name}`);
     await create.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('cell', { name: phone })).toBeVisible();
     await page.getByRole('cell', { name: phone }).click();
@@ -64,7 +66,7 @@ test.describe('catalog', () => {
     await expect(page.getByText('APPROVED', { exact: true })).toBeVisible();
 
     await openDashboardLink(page, 'Number lookup');
-    await page.getByLabel('Number').fill('+14155552671');
+    await page.getByRole('textbox', { name: 'Number', exact: true }).fill('+14155552671');
     await page.getByRole('button', { name: 'Look up' }).click();
     const result = page.locator('dd');
     await expect(result.filter({ hasText: 'United States' })).toBeVisible();
