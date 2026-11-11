@@ -47,7 +47,11 @@ async function enableCountry(page: Page, name: string, activate: 'click' | 'ente
   await expect(countryCell).toBeVisible();
 }
 
-async function creditOneDollar(page: Page, reason: string, activate: 'click' | 'enter'): Promise<void> {
+async function creditOneDollar(
+  page: Page,
+  reason: string,
+  activate: 'click' | 'enter',
+): Promise<void> {
   await page.getByRole('link', { name: 'Admin', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
   await page.getByRole('button', { name: 'Credit' }).first().click();
