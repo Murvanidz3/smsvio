@@ -178,9 +178,9 @@ export default function SendersPage() {
         </table>
       </div>
       {adding ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 px-4 py-8">
           <div
-            className="bg-popover w-full max-w-md rounded-xl border p-5"
+            className="bg-popover mx-auto w-full max-w-md rounded-xl border p-5"
             role="dialog"
             aria-labelledby="add-country-title"
           >
