@@ -11,6 +11,14 @@
     "./phone": {
       "types": "./dist/sms/phone-api.d.ts",
       "default": "./dist/sms/phone-api.js"
+    },
+    "./billing": {
+      "types": "./dist/billing/index.d.ts",
+      "default": "./dist/billing/index.js"
+    },
+    "./provider": {
+      "types": "./dist/provider/index.d.ts",
+      "default": "./dist/provider/index.js"
     }
   },
   "files": [

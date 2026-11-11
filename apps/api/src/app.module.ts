@@ -4,6 +4,7 @@ import { createLoggerModule, PrismaModule, RedisModule } from '@smsvio/server';
 
 import { AccountsModule } from './accounts/accounts.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
+import { MessagingModule } from './messaging/messaging.module.js';
 import { API_ENV } from './config.js';
 import type { ApiEnv } from './env.js';
 import { HealthController } from './health/health.controller.js';
@@ -41,6 +42,7 @@ export class AppModule {
         RedisModule.forRoot({ url: env.REDIS_URL, connectionName: 'smsvio-api' }),
         AccountsModule,
         CatalogModule,
+        MessagingModule,
       ],
       controllers: [HealthController],
     };

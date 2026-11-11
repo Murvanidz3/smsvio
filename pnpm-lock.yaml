@@ -411,6 +411,9 @@ importers:
       '@sentry/nestjs':
         specifier: 11.11.0
         version: 11.11.0(@nestjs/common@12.4.2(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/core@12.4.2(@nestjs/common@12.4.2(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(reflect-metadata@0.2.2)(rxjs@7.8.2))
+      '@smsvio/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@smsvio/server':
         specifier: workspace:*
         version: link:../../packages/server

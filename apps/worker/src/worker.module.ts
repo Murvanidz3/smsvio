@@ -1,9 +1,10 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { SentryModule } from '@sentry/nestjs/setup';
-import { createLoggerModule, RedisModule } from '@smsvio/server';
+import { createLoggerModule, PrismaModule, RedisModule } from '@smsvio/server';
 
 import type { WorkerEnv } from './env.js';
 import { HEARTBEAT_SETTINGS, HeartbeatService, type HeartbeatSettings } from './heartbeat.js';
+import { LedgerSweep } from './ledger-sweep.js';
 
 @Module({})
 export class WorkerModule {
@@ -18,8 +19,16 @@ export class WorkerModule {
         SentryModule.forRoot(),
         createLoggerModule({ service: 'worker', level: env.LOG_LEVEL }),
         RedisModule.forRoot({ url: env.REDIS_URL, connectionName: 'smsvio-worker' }),
+        PrismaModule.forRoot({
+          connectionString: env.DATABASE_URL,
+          maxConnections: env.DATABASE_POOL_MAX,
+        }),
       ],
-      providers: [{ provide: HEARTBEAT_SETTINGS, useValue: heartbeat }, HeartbeatService],
+      providers: [
+        { provide: HEARTBEAT_SETTINGS, useValue: heartbeat },
+        HeartbeatService,
+        LedgerSweep,
+      ],
     };
   }
 }

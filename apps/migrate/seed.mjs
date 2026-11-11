@@ -30,6 +30,46 @@ const prisma = createPrismaClient({ connectionString: process.env.DATABASE_URL ?
 try {
   await prisma.country.createMany({ data: countrySeedRows(), skipDuplicates: true });
 
+  const billing = await import('@smsvio/shared/billing');
+  await prisma.platformSetting.upsert({
+    where: { id: billing.PLATFORM_SETTING_ID },
+    create: {
+      id: billing.PLATFORM_SETTING_ID,
+      defaultDailySpendCapMicros: billing.DEFAULT_DAILY_SPEND_CAP_MICROS,
+    },
+    update: {},
+  });
+  const provider = await prisma.provider.upsert({
+    where: { code: billing.MOCK_PROVIDER_CODE },
+    create: {
+      code: billing.MOCK_PROVIDER_CODE,
+      type: 'MOCK',
+      status: 'ACTIVE',
+      maxTps: billing.MOCK_SEED_MAX_TPS,
+      markupPercent: billing.MOCK_SEED_MARKUP_PERCENT,
+    },
+    update: {},
+  });
+  const countries = await prisma.country.findMany({ select: { iso2: true } });
+  for (const country of countries) {
+    const existing = await prisma.route.findFirst({
+      where: { countryIso2: country.iso2, mccmnc: null, providerId: provider.id },
+    });
+    if (existing !== null) {
+      continue;
+    }
+    await prisma.route.create({
+      data: {
+        countryIso2: country.iso2,
+        providerId: provider.id,
+        priority: billing.MOCK_SEED_PRIORITY,
+        weight: 1,
+        costMicros: billing.MOCK_SEED_COST_MICROS,
+        enabled: true,
+      },
+    });
+  }
+
   const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SEED_ADMIN_PASSWORD ?? '';
   const skipAdmin = email === undefined || email === '' || password === '';

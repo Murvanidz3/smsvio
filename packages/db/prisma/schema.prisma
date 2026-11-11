@@ -102,12 +102,17 @@ model Organization {
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
-  memberships Membership[]
-  invitations Invitation[]
-  auditLogs   AuditLog[]
-  contacts    Contact[]
-  templates   Template[]
-  messages    Message[]
+  memberships  Membership[]
+  invitations  Invitation[]
+  auditLogs    AuditLog[]
+  contacts     Contact[]
+  templates    Template[]
+  messages     Message[]
+  senderIds    SenderId[]
+  orgCountries OrgCountry[]
+  orgRates     OrgRate[]
+  balance      OrgBalance?
+  ledgerEntries LedgerEntry[]
 
   @@index([status])
   @@map("organizations")
@@ -223,6 +228,10 @@ model Country {
   enabled              Boolean  @default(true)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+  networks             Network[]
+  routes               Route[]
+  rates                Rate[]
+  orgCountries         OrgCountry[]
 
   @@map("countries")
 }
@@ -298,6 +307,8 @@ model Message {
   organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   template          Template?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
   user              User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  provider          Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  route             Route?           @relation(fields: [routeId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, createdAt(sort: Desc)])
   @@index([organizationId, status, createdAt])
@@ -305,4 +316,198 @@ model Message {
   @@unique([providerId, providerMessageId])
   @@unique([organizationId, clientRef])
   @@map("messages")
+}
+
+enum ProviderType {
+  MOCK
+  SMPP
+  HTTP
+}
+
+enum ProviderStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum SenderType {
+  ALPHANUMERIC
+  LONG_CODE
+  SHORT_CODE
+}
+
+enum SenderStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LedgerType {
+  TOPUP
+  HOLD
+  CHARGE
+  RELEASE
+  REFUND
+  ADJUSTMENT
+}
+
+/// MCC/MNC reference names. A route may name a network before a row exists here.
+model Network {
+  mcc         String
+  mnc         String
+  countryIso2 String   @db.Char(2)
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  country     Country  @relation(fields: [countryIso2], references: [iso2], onDelete: Cascade)
+
+  @@id([mcc, mnc])
+  @@index([countryIso2])
+  @@map("networks")
+}
+
+model Provider {
+  id                 String         @id @default(uuid()) @db.Uuid
+  code               String         @unique
+  type               ProviderType
+  configEnc          String?
+  status             ProviderStatus @default(ACTIVE)
+  maxTps             Int
+  callbackSecretHash String?
+  /// Required customer markup over this provider's route cost. 50 means cost + 50%.
+  markupPercent      Int
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  routes             Route[]
+  messages           Message[]
+
+  @@map("providers")
+}
+
+model Route {
+  id            String    @id @default(uuid()) @db.Uuid
+  countryIso2   String    @db.Char(2)
+  /// Null is the country-wide route. A value is an MCC+MNC override.
+  mccmnc        String?
+  providerId    String    @db.Uuid
+  /// Lower numbers are chosen first.
+  priority      Int
+  weight        Int
+  costMicros    BigInt
+  /// When set, replaces the provider markup for this destination only.
+  markupPercent Int?
+  enabled       Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  country       Country   @relation(fields: [countryIso2], references: [iso2], onDelete: Restrict)
+  provider      Provider  @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  messages      Message[]
+
+  @@index([countryIso2, enabled, priority])
+  @@map("routes")
+}
+
+/// A manual fixed customer price. The latest effectiveFrom at or before now wins.
+model Rate {
+  id            String   @id @default(uuid()) @db.Uuid
+  countryIso2   String   @db.Char(2)
+  mccmnc        String?
+  priceMicros   BigInt
+  effectiveFrom DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  country       Country  @relation(fields: [countryIso2], references: [iso2], onDelete: Restrict)
+
+  @@index([countryIso2, mccmnc, effectiveFrom])
+  @@map("rates")
+}
+
+model OrgRate {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  countryIso2    String       @db.Char(2)
+  mccmnc         String?
+  priceMicros    BigInt
+  effectiveFrom  DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, countryIso2, mccmnc, effectiveFrom])
+  @@map("org_rates")
+}
+
+model SenderId {
+  id                String       @id @default(uuid()) @db.Uuid
+  organizationId    String       @db.Uuid
+  type              SenderType
+  value             String
+  status            SenderStatus @default(PENDING)
+  useCase           String
+  reviewNote        String?
+  intendedCountries String[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  orgCountries      OrgCountry[]
+
+  @@unique([organizationId, value])
+  @@index([organizationId, createdAt])
+  @@map("sender_ids")
+}
+
+model OrgCountry {
+  id                   String       @id @default(uuid()) @db.Uuid
+  organizationId       String       @db.Uuid
+  countryIso2          String       @db.Char(2)
+  senderIdId           String?      @db.Uuid
+  registrationComplete Boolean      @default(false)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  country              Country      @relation(fields: [countryIso2], references: [iso2], onDelete: Restrict)
+  sender               SenderId?    @relation(fields: [senderIdId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, countryIso2])
+  @@index([organizationId])
+  @@map("org_countries")
+}
+
+model OrgBalance {
+  organizationId  String       @id @db.Uuid
+  availableMicros BigInt       @default(0)
+  heldMicros      BigInt       @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("org_balances")
+}
+
+/// Append-only. amountMicros is the available-balance delta, except CHARGE, which records the price and does not move available.
+model LedgerEntry {
+  id                 String       @id @default(uuid()) @db.Uuid
+  organizationId     String       @db.Uuid
+  type               LedgerType
+  amountMicros       BigInt
+  balanceAfterMicros BigInt
+  refType            String?
+  refId              String?
+  note               String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, refId])
+  @@map("ledger_entries")
+}
+
+/// Single row id `platform`. Organizations with a null spend cap inherit this value.
+model PlatformSetting {
+  id                         String   @id
+  defaultDailySpendCapMicros BigInt
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@map("platform_settings")
 }

@@ -4,23 +4,24 @@ SMSVIO is a business SMS platform: one dashboard and one API for sending message
 repository holds the whole product — web app, API, background worker, database schema and the
 infrastructure that runs it at [smsvio.com](https://smsvio.com).
 
-The build follows the phases in [`docs/SPEC.md`](docs/SPEC.md). **Phase 2 (SMS library,
-contacts, templates, and number lookup)** is complete. People can save contacts, import a CSV,
-draft and submit templates, and look up a number offline. Phase 1 (accounts and shell) and
-Phase 0 (foundation, Docker, CI/CD, and production hosting) remain underneath it. Sending
-starts in Phase 3.
+The build follows the phases in [`docs/SPEC.md`](docs/SPEC.md). **Phase 3 part A (providers,
+routes, rates, senders, and balances)** is in place. Operators set a markup on each provider,
+see the resulting customer price, import manual rates, and credit a balance. Customers enable
+countries and request a sender. The send pipeline, the Send screen, and the Messages screen are
+part B and are not built yet. Phase 2 (contacts, templates, and number lookup), Phase 1
+(accounts), and Phase 0 (foundation and production hosting) remain underneath it.
 
 ## Repository layout
 
 ```
 apps/
-  web/        Next.js 16 app: landing page, accounts, contacts, templates, and number lookup
+  web/        Next.js 16 app: landing page, accounts, contacts, templates, senders, admin, lookup
   api/        NestJS + Fastify REST API (/api/*, /healthz, /readyz)
-  worker/     NestJS background worker (queues from Phase 3)
+  worker/     NestJS worker: heartbeat and a nightly ledger check (queues arrive with sending)
   migrate/    One-shot container: Prisma migrations, then the demo seed
 packages/
   config/     Shared ESLint, Prettier and TypeScript presets
-  shared/     Env validation, auth schemas, the SMS library, passwords, roles, and error helpers
+  shared/     Env validation, auth, the SMS library, pricing, the mock provider, and roles
   db/         Prisma schema, migrations and client factory
   server/     NestJS modules shared by api and worker: logging, Prisma, Redis, probes, Sentry
 infra/

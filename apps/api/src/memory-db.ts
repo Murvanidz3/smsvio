@@ -277,6 +277,7 @@ export function createMemoryDb() {
   const templates = new Map<string, TemplateRow>();
   const messages = new Map<string, MessageRow>();
   const countries = new Map<string, CountryRow>();
+  const messaging = createMessagingMemory();
 
   function userByEmail(email: string): UserRow | null {
     return [...users.values()].find((user) => user.email === email) ?? null;
@@ -438,8 +439,34 @@ export function createMemoryDb() {
             audits.splice(index, 1);
           }
         }
+        messaging.clearOrganization(where.id);
         return Promise.resolve(row);
       },
+      count: ({ where }: { where?: Where }) =>
+        Promise.resolve(
+          [...organizations.values()].filter((row) => matches(row, where ?? {})).length,
+        ),
+      findMany: ({
+        where,
+        orderBy,
+        skip,
+        take,
+      }: {
+        where?: Where;
+        orderBy?: Record<string, 'asc' | 'desc'>;
+        skip?: number;
+        take?: number;
+      } = {}) =>
+        Promise.resolve(
+          pageOf(
+            byOrder(
+              [...organizations.values()].filter((row) => matches(row, where ?? {})),
+              orderBy,
+            ),
+            skip,
+            take,
+          ),
+        ),
     },
     membership: {
       count: ({ where }: { where: Where }) =>
@@ -807,6 +834,8 @@ export function createMemoryDb() {
       },
     },
     country: {
+      findUnique: ({ where }: { where: { iso2: string } }) =>
+        Promise.resolve(countries.get(where.iso2) ?? null),
       findMany: ({ where, orderBy }: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'> }) =>
         Promise.resolve(
           byOrder(
@@ -871,9 +900,472 @@ export function createMemoryDb() {
         return Promise.resolve(rows.slice(skip ?? 0, (skip ?? 0) + (take ?? rows.length)));
       },
     },
+    ...messaging.delegates,
   };
 
   return db;
+}
+
+function listed<T extends object>(
+  rows: Iterable<T>,
+  args?: {
+    where?: Where;
+    orderBy?: Record<string, 'asc' | 'desc'>;
+    skip?: number;
+    take?: number;
+  },
+): T[] {
+  const query = args ?? {};
+  return pageOf(
+    byOrder(
+      [...rows].filter((row) => matches(row, query.where ?? {})),
+      query.orderBy,
+    ),
+    query.skip,
+    query.take,
+  );
+}
+
+function removeWhere<T extends object>(
+  rows: Map<string, T>,
+  where: Where,
+  key: (row: T) => string,
+): { count: number } {
+  let count = 0;
+  for (const row of [...rows.values()]) {
+    if (matches(row, where)) {
+      rows.delete(key(row));
+      count += 1;
+    }
+  }
+  return { count };
+}
+
+function nextAmount(current: bigint, change: unknown): bigint {
+  if (typeof change === 'bigint') {
+    return change;
+  }
+  if (typeof change === 'object' && change !== null) {
+    const record = change as { increment?: bigint; decrement?: bigint };
+    if (typeof record.increment === 'bigint') {
+      return current + record.increment;
+    }
+    if (typeof record.decrement === 'bigint') {
+      return current - record.decrement;
+    }
+  }
+  return current;
+}
+
+function amountAllows(value: bigint, expected: unknown): boolean {
+  if (expected === undefined) {
+    return true;
+  }
+  if (typeof expected === 'bigint') {
+    return value === expected;
+  }
+  if (typeof expected === 'object' && expected !== null && 'gte' in expected) {
+    const bound = expected.gte;
+    return typeof bound === 'bigint' && value >= bound;
+  }
+  return false;
+}
+
+function createMessagingMemory() {
+  interface Timed {
+    createdAt: Date;
+    updatedAt: Date;
+  }
+  interface ProviderRow extends Timed {
+    id: string;
+    code: string;
+    type: 'MOCK' | 'SMPP' | 'HTTP';
+    configEnc: string | null;
+    status: 'ACTIVE' | 'DISABLED';
+    maxTps: number;
+    callbackSecretHash: string | null;
+    markupPercent: number;
+  }
+  interface RouteRow extends Timed {
+    id: string;
+    countryIso2: string;
+    mccmnc: string | null;
+    providerId: string;
+    priority: number;
+    weight: number;
+    costMicros: bigint;
+    markupPercent: number | null;
+    enabled: boolean;
+  }
+  interface RateRow extends Timed {
+    id: string;
+    countryIso2: string;
+    mccmnc: string | null;
+    priceMicros: bigint;
+    effectiveFrom: Date;
+  }
+  interface OrgRateRow extends RateRow {
+    organizationId: string;
+  }
+  interface SenderRow extends Timed {
+    id: string;
+    organizationId: string;
+    type: 'ALPHANUMERIC' | 'LONG_CODE' | 'SHORT_CODE';
+    value: string;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    useCase: string;
+    reviewNote: string | null;
+    intendedCountries: string[];
+  }
+  interface OrgCountryRow extends Timed {
+    id: string;
+    organizationId: string;
+    countryIso2: string;
+    senderIdId: string | null;
+    registrationComplete: boolean;
+  }
+  interface BalanceRow extends Timed {
+    organizationId: string;
+    availableMicros: bigint;
+    heldMicros: bigint;
+  }
+  interface LedgerRow extends Timed {
+    id: string;
+    organizationId: string;
+    type: 'TOPUP' | 'HOLD' | 'CHARGE' | 'RELEASE' | 'REFUND' | 'ADJUSTMENT';
+    amountMicros: bigint;
+    balanceAfterMicros: bigint;
+    refType: string | null;
+    refId: string | null;
+    note: string | null;
+  }
+  interface SettingRow extends Timed {
+    id: string;
+    defaultDailySpendCapMicros: bigint;
+  }
+
+  const providers = new Map<string, ProviderRow>();
+  const routes = new Map<string, RouteRow>();
+  const rates = new Map<string, RateRow>();
+  const orgRates = new Map<string, OrgRateRow>();
+  const senderIds = new Map<string, SenderRow>();
+  const orgCountries = new Map<string, OrgCountryRow>();
+  const balances = new Map<string, BalanceRow>();
+  const ledger: LedgerRow[] = [];
+  const settings = new Map<string, SettingRow>();
+
+  function timed<T extends object>(data: T & { id?: string }): T & Timed & { id: string } {
+    const now = new Date();
+    return { id: data.id ?? randomUUID(), createdAt: now, updatedAt: now, ...data };
+  }
+
+  return {
+    clearOrganization(organizationId: string) {
+      for (const [id, row] of senderIds) {
+        if (row.organizationId === organizationId) {
+          senderIds.delete(id);
+        }
+      }
+      for (const [id, row] of orgCountries) {
+        if (row.organizationId === organizationId) {
+          orgCountries.delete(id);
+        }
+      }
+      for (const [id, row] of orgRates) {
+        if (row.organizationId === organizationId) {
+          orgRates.delete(id);
+        }
+      }
+      balances.delete(organizationId);
+      for (let index = ledger.length - 1; index >= 0; index -= 1) {
+        if (ledger[index]?.organizationId === organizationId) {
+          ledger.splice(index, 1);
+        }
+      }
+    },
+    delegates: {
+      provider: {
+        findMany: (args?: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'> }) =>
+          Promise.resolve(listed(providers.values(), args)),
+        findUnique: ({ where }: { where: { id: string } }) =>
+          Promise.resolve(providers.get(where.id) ?? null),
+        create: ({
+          data,
+        }: {
+          data: Omit<ProviderRow, 'id' | 'createdAt' | 'updatedAt'> & Partial<ProviderRow>;
+        }) => {
+          if ([...providers.values()].some((row) => row.code === data.code)) {
+            uniqueConflict();
+          }
+          const row = timed(data);
+          providers.set(row.id, row);
+          return Promise.resolve(row);
+        },
+        update: ({ where, data }: { where: { id: string }; data: Partial<ProviderRow> }) => {
+          const row = providers.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing provider ${where.id}`);
+          }
+          Object.assign(row, data, { updatedAt: new Date() });
+          return Promise.resolve(row);
+        },
+      },
+      route: {
+        findMany: (args?: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'> }) =>
+          Promise.resolve(listed(routes.values(), args)),
+        findUnique: ({ where }: { where: { id: string } }) =>
+          Promise.resolve(routes.get(where.id) ?? null),
+        create: ({
+          data,
+        }: {
+          data: Omit<RouteRow, 'id' | 'createdAt' | 'updatedAt' | 'markupPercent' | 'enabled'> &
+            Partial<RouteRow>;
+        }) => {
+          const duplicate = [...routes.values()].some(
+            (row) =>
+              row.countryIso2 === data.countryIso2 &&
+              row.mccmnc === (data.mccmnc ?? null) &&
+              row.providerId === data.providerId,
+          );
+          if (duplicate) {
+            uniqueConflict();
+          }
+          const row = timed({
+            ...data,
+            markupPercent: data.markupPercent ?? null,
+            enabled: data.enabled ?? true,
+            mccmnc: data.mccmnc ?? null,
+          });
+          routes.set(row.id, row);
+          return Promise.resolve(row);
+        },
+        update: ({ where, data }: { where: { id: string }; data: Partial<RouteRow> }) => {
+          const row = routes.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing route ${where.id}`);
+          }
+          Object.assign(row, data, { updatedAt: new Date() });
+          return Promise.resolve(row);
+        },
+        delete: ({ where }: { where: { id: string } }) => {
+          const row = routes.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing route ${where.id}`);
+          }
+          routes.delete(where.id);
+          return Promise.resolve(row);
+        },
+      },
+      rate: {
+        findMany: (args?: { where?: Where }) => Promise.resolve(listed(rates.values(), args)),
+        create: ({
+          data,
+        }: {
+          data: Omit<RateRow, 'id' | 'createdAt' | 'updatedAt' | 'mccmnc'> & Partial<RateRow>;
+        }) => {
+          const row = timed({ ...data, mccmnc: data.mccmnc ?? null });
+          rates.set(row.id, row);
+          return Promise.resolve(row);
+        },
+        deleteMany: ({ where }: { where: Where }) =>
+          Promise.resolve(removeWhere(rates, where, (row) => row.id)),
+      },
+      orgRate: {
+        findMany: (args?: { where?: Where }) => Promise.resolve(listed(orgRates.values(), args)),
+        create: ({
+          data,
+        }: {
+          data: Omit<OrgRateRow, 'id' | 'createdAt' | 'updatedAt' | 'mccmnc'> & Partial<OrgRateRow>;
+        }) => {
+          const row = timed({ ...data, mccmnc: data.mccmnc ?? null });
+          orgRates.set(row.id, row);
+          return Promise.resolve(row);
+        },
+        deleteMany: ({ where }: { where: Where }) =>
+          Promise.resolve(removeWhere(orgRates, where, (row) => row.id)),
+      },
+      orgBalance: {
+        findMany: (args?: { where?: Where }) => Promise.resolve(listed(balances.values(), args)),
+        findUnique: ({ where }: { where: { organizationId: string } }) =>
+          Promise.resolve(balances.get(where.organizationId) ?? null),
+        create: ({
+          data,
+        }: {
+          data: Omit<BalanceRow, 'createdAt' | 'updatedAt'> & Partial<BalanceRow>;
+        }) => {
+          if (balances.has(data.organizationId)) {
+            uniqueConflict();
+          }
+          const now = new Date();
+          const row: BalanceRow = {
+            ...data,
+            createdAt: now,
+            updatedAt: now,
+          };
+          balances.set(row.organizationId, row);
+          return Promise.resolve(row);
+        },
+        updateMany: ({
+          where,
+          data,
+        }: {
+          where: { organizationId?: unknown; availableMicros?: unknown; heldMicros?: unknown };
+          data: { availableMicros?: unknown; heldMicros?: unknown };
+        }) => {
+          const hits = [...balances.values()].filter((row) => {
+            if (
+              typeof where.organizationId === 'string' &&
+              row.organizationId !== where.organizationId
+            ) {
+              return false;
+            }
+            if (
+              typeof where.organizationId === 'object' &&
+              where.organizationId !== null &&
+              !matches(row, { organizationId: where.organizationId })
+            ) {
+              return false;
+            }
+            return (
+              amountAllows(row.availableMicros, where.availableMicros) &&
+              amountAllows(row.heldMicros, where.heldMicros)
+            );
+          });
+          for (const row of hits) {
+            if (data.availableMicros !== undefined) {
+              row.availableMicros = nextAmount(row.availableMicros, data.availableMicros);
+            }
+            if (data.heldMicros !== undefined) {
+              row.heldMicros = nextAmount(row.heldMicros, data.heldMicros);
+            }
+            row.updatedAt = new Date();
+          }
+          return Promise.resolve({ count: hits.length });
+        },
+      },
+      ledgerEntry: {
+        findMany: (args?: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'> }) =>
+          Promise.resolve(listed(ledger, args)),
+        findFirst: ({ where }: { where: Where }) =>
+          Promise.resolve(ledger.find((row) => matches(row, where)) ?? null),
+        create: ({
+          data,
+        }: {
+          data: Omit<LedgerRow, 'id' | 'createdAt' | 'updatedAt' | 'refType' | 'refId' | 'note'> &
+            Partial<LedgerRow>;
+        }) => {
+          const row = timed({
+            ...data,
+            refType: data.refType ?? null,
+            refId: data.refId ?? null,
+            note: data.note ?? null,
+          });
+          ledger.push(row);
+          return Promise.resolve(row);
+        },
+      },
+      senderId: {
+        findMany: (args?: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'> }) =>
+          Promise.resolve(listed(senderIds.values(), args)),
+        findFirst: ({ where }: { where: Where }) =>
+          Promise.resolve([...senderIds.values()].find((row) => matches(row, where)) ?? null),
+        create: ({
+          data,
+        }: {
+          data: Omit<
+            SenderRow,
+            'id' | 'createdAt' | 'updatedAt' | 'reviewNote' | 'status' | 'intendedCountries'
+          > &
+            Partial<SenderRow>;
+        }) => {
+          const duplicate = [...senderIds.values()].some(
+            (row) => row.organizationId === data.organizationId && row.value === data.value,
+          );
+          if (duplicate) {
+            uniqueConflict();
+          }
+          const row = timed({
+            ...data,
+            reviewNote: data.reviewNote ?? null,
+            status: data.status ?? 'PENDING',
+            intendedCountries: data.intendedCountries ?? [],
+          });
+          senderIds.set(row.id, row);
+          return Promise.resolve(row);
+        },
+      },
+      orgCountry: {
+        findMany: (args?: { where?: Where }) =>
+          Promise.resolve(listed(orgCountries.values(), args)),
+        findFirst: ({ where }: { where: Where }) =>
+          Promise.resolve([...orgCountries.values()].find((row) => matches(row, where)) ?? null),
+        create: ({
+          data,
+        }: {
+          data: Omit<
+            OrgCountryRow,
+            'id' | 'createdAt' | 'updatedAt' | 'senderIdId' | 'registrationComplete'
+          > &
+            Partial<OrgCountryRow>;
+        }) => {
+          const duplicate = [...orgCountries.values()].some(
+            (row) =>
+              row.organizationId === data.organizationId && row.countryIso2 === data.countryIso2,
+          );
+          if (duplicate) {
+            uniqueConflict();
+          }
+          const row = timed({
+            ...data,
+            senderIdId: data.senderIdId ?? null,
+            registrationComplete: data.registrationComplete ?? false,
+          });
+          orgCountries.set(row.id, row);
+          return Promise.resolve(row);
+        },
+        delete: ({ where }: { where: { id: string } }) => {
+          const row = orgCountries.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing org country ${where.id}`);
+          }
+          orgCountries.delete(where.id);
+          return Promise.resolve(row);
+        },
+      },
+      platformSetting: {
+        findUnique: ({ where }: { where: { id: string } }) =>
+          Promise.resolve(settings.get(where.id) ?? null),
+        create: ({ data }: { data: Omit<SettingRow, 'createdAt' | 'updatedAt'> }) => {
+          if (settings.has(data.id)) {
+            uniqueConflict();
+          }
+          const now = new Date();
+          const row: SettingRow = { createdAt: now, updatedAt: now, ...data };
+          settings.set(row.id, row);
+          return Promise.resolve(row);
+        },
+        upsert: ({
+          where,
+          create,
+          update,
+        }: {
+          where: { id: string };
+          create: Omit<SettingRow, 'createdAt' | 'updatedAt'>;
+          update: Partial<SettingRow>;
+        }) => {
+          const existing = settings.get(where.id);
+          if (existing !== undefined) {
+            Object.assign(existing, update, { updatedAt: new Date() });
+            return Promise.resolve(existing);
+          }
+          const now = new Date();
+          const row: SettingRow = { createdAt: now, updatedAt: now, ...create };
+          settings.set(row.id, row);
+          return Promise.resolve(row);
+        },
+      },
+    },
+  };
 }
 
 export function createMemoryRedis() {

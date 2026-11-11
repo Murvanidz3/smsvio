@@ -93,6 +93,12 @@ export function presentAccount(
   };
 }
 
+export function assertPlatformAdmin(state: AuthState): void {
+  if (!state.body.user.isPlatformAdmin) {
+    throw new ApiError(404, 'not_found', 'That page does not exist.');
+  }
+}
+
 export function assertCapability(
   state: AuthState,
   capability: Capability,

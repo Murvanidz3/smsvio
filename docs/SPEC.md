@@ -194,8 +194,8 @@ UUID primary keys. `createdAt`/`updatedAt` on every table. All tenant tables car
 - **Network** — mcc, mnc, countryIso2, name.
 - **SenderId** — organizationId, type (`ALPHANUMERIC | LONG_CODE | SHORT_CODE`), value, status (`PENDING | APPROVED | REJECTED`), useCase, reviewNote.
 - **OrgCountry** — organizationId, countryIso2, senderIdId (nullable = platform shared sender), registrationComplete. Unique (organizationId, countryIso2).
-- **Provider** — code (unique), type (`MOCK | SMPP | HTTP`), configEnc, status, maxTps, callbackSecretHash.
-- **Route** — countryIso2, mccmnc (nullable), providerId, priority, weight, costMicros, enabled.
+- **Provider** — code (unique), type (`MOCK | SMPP | HTTP`), configEnc, status, maxTps, callbackSecretHash, markupPercent (required; 50 means the customer price is cost + 50%).
+- **Route** — countryIso2, mccmnc (nullable), providerId, priority (lower wins), weight, costMicros, markupPercent (nullable override of the provider markup), enabled. The customer price for a destination is the primary enabled route's cost times one plus the effective markup, rounded up to the nearest 100 micros. The route override wins over the provider markup. A manual Rate and an OrgRate replace that computed price. The customer is charged the quoted price even when failover uses another route; the message stores the cost of the route that was actually used.
 - **Rate** — countryIso2, mccmnc (nullable), priceMicros, effectiveFrom. **OrgRate** — per-organization override.
 - **Message** — organizationId, direction, to, from, body, templateId, templateVars, encoding, segments, countryIso2, mccmnc, status, errorCode, providerId, providerMessageId, routeId, priceMicros, costMicros, clientRef, apiKeyId, userId, scheduledAt, queuedAt, sentAt, deliveredAt, failedAt. Indexes: (organizationId, createdAt DESC), (organizationId, status, createdAt), (organizationId, to), unique (providerId, providerMessageId), unique (organizationId, clientRef).
 - **MessageEvent** — messageId, status, detail, providerRaw (jsonb).

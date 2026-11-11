@@ -283,3 +283,52 @@ to `main` and must pass there. The deploy job does not start unless all three su
 - The editor's API tab shows cURL, Node, and Python for `POST /api/v1/messages`. That route is
   not implemented until the public API phase. The snippets are the request the editor is
   specified to show.
+
+## Phase 3a — Routes, rates, senders, and the ledger (2026-11-11)
+
+- Markup is per provider, not global. `Provider.markupPercent` is required. `Route.markupPercent`
+  is an optional override for that destination. There is no platform markup and no minimum margin.
+- The customer price per segment is the cost of the primary route times
+  `(1 + effective markup / 100)`, rounded up to the nearest 100 micros (0.0001 USD). The effective
+  markup is the route override when it is set, otherwise the provider's markup. Prices are computed
+  when they are read, so a change to cost, priority, enabled, or either markup shows up on the next
+  read. Computed prices are not stored as `Rate` rows.
+- The primary route is the enabled route whose provider is `ACTIVE`, with the lowest priority
+  number, then the highest weight, then the lowest id. A network-specific route beats a
+  country-wide route. A disabled provider does not set the customer price. Each route row still
+  shows its own formula price and margin, which can be negative.
+- Price overrides, highest first: `OrgRate` (one customer), then a manual `Rate`, then the computed
+  primary-route price. The latest `effectiveFrom` at or before now wins. CSV import inserts a newer
+  manual rate and does not delete history. Duplicate destinations in one file are rejected.
+- The customer is charged the quoted price even when a later failover uses a different provider.
+  Each message will store `costMicros` of the route that was actually used, so margin can be
+  negative. Charging and failover are Part B. The columns exist now.
+- A new organization's `dailySpendCapMicros` stays null and inherits
+  `PlatformSetting.defaultDailySpendCapMicros`, which starts at 20,000,000 micros (20 USD). An
+  admin can change the platform value and can set or clear a per-organization override. The cap is
+  not enforced until send exists.
+- Ledger signs: `amountMicros` is the change to available balance, except `CHARGE`, which records
+  the negative price and does not change available. `HOLD` decreases available and increases held.
+  `RELEASE` does the opposite. `TOPUP`, `REFUND`, and `ADJUSTMENT` move available only. The nightly
+  check is `available = SUM(amount)` excluding `CHARGE`, and held is the open remainder of
+  `HOLD` / `RELEASE` / `CHARGE` grouped by `refId`. The same hold, charge, or release for one
+  `refId` is a no-op. The worker runs that check once per UTC day (`smsvio:ledger:sweep:YYYY-MM-DD`)
+  and logs differences at error. There is no operator alert channel yet, and there is no BullMQ
+  queue in this part.
+- An admin balance adjustment requires a reason of 3–500 characters, is written to the audit log
+  in the same transaction, and cannot be zero. The maximum is 1,000,000 USD.
+- Someone who is not a platform admin gets 404 on `/api/internal/admin`, not 403.
+- `MockProvider` never contacts a network. Delivery is decided by the last four digits of the
+  destination: 1001 delivered, 1002 undelivered, 1003 permanent failure, 1004 expired, 1005 slow
+  delivered (30s), 1006 temporary failure, anything else delivered. The callback signature is the
+  SHA-256 hex of the secret. The seed provider has no secret, so verification fails closed. SMPP
+  and HTTP health checks return not-ok and do not open a connection.
+- The seed creates provider `mock` at 50% markup and one country-wide route per country at priority
+  100, weight 1, and 10,000 micros, without overwriting an existing provider markup or route. The
+  resulting list price is 15,000 micros (0.0150 USD). The platform shared sender is the fictional
+  number 12025550199. Networks are not seeded. `Route.mccmnc` is not a foreign key.
+- Sender requests stay `PENDING`. The approval queue is Phase 6. Enabling a country is idempotent
+  and uses the shared sender until then. `registrationComplete` is false when the country requires
+  registration; completing it is Phase 6. Real phone verification stays deferred.
+- `Message.providerId` and `Message.routeId` now reference Provider and Route and are set null if
+  that row is removed. `apiKeyId` still has no foreign key.

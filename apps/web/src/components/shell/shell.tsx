@@ -27,6 +27,7 @@ const NAV = [
   { href: '/dashboard', label: 'Overview', group: 'Main' },
   { href: '/dashboard/templates', label: 'Templates', group: 'Main' },
   { href: '/dashboard/contacts', label: 'Contacts', group: 'Main' },
+  { href: '/dashboard/senders', label: 'Senders', group: 'Main' },
   { href: '/dashboard/users', label: 'Users', group: 'Account' },
   { href: '/dashboard/settings', label: 'Settings', group: 'Account' },
   { href: '/dashboard/tools/number-lookup', label: 'Number lookup', group: 'Tools' },
@@ -141,6 +142,11 @@ export function Shell({ children }: { children: ReactNode }) {
                 {data.organization.role}
               </span>
             )}
+            {data?.user.isPlatformAdmin === true ? (
+              <Link href="/admin" className="text-sm font-medium">
+                Admin
+              </Link>
+            ) : null}
             <ThemeToggle />
             <Button type="button" variant="ghost" onClick={() => void signOut()}>
               Sign out
@@ -323,6 +329,12 @@ export function useCanMessage(): boolean {
   const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
   const role = session.data?.organization?.role;
   return role !== undefined && roleAllows(role, 'messaging');
+}
+
+export function useCanCompliance(): boolean {
+  const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
+  const role = session.data?.organization?.role;
+  return role !== undefined && roleAllows(role, 'compliance');
 }
 
 export function useCanManage(): boolean {

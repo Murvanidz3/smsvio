@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { REDIS } from '@smsvio/server';
+import { PRISMA, REDIS } from '@smsvio/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadWorkerEnv } from './env.js';
@@ -25,6 +25,7 @@ function fakeRedis() {
 const env = loadWorkerEnv({
   LOG_LEVEL: 'silent',
   REDIS_URL: 'redis://redis:6379',
+  DATABASE_URL: 'postgresql://smsvio:pw@postgres:5432/smsvio',
   WORKER_HEARTBEAT_INTERVAL_MS: '1000',
 });
 
@@ -69,6 +70,12 @@ describe('HeartbeatService in the worker module', () => {
     })
       .overrideProvider(REDIS)
       .useValue(redis)
+      .overrideProvider(PRISMA)
+      .useValue({
+        orgBalance: { findMany: () => Promise.resolve([]) },
+        ledgerEntry: { findMany: () => Promise.resolve([]) },
+        $disconnect: () => Promise.resolve(),
+      })
       .compile();
     moduleRef.enableShutdownHooks();
     await moduleRef.init();
@@ -84,7 +91,7 @@ describe('HeartbeatService in the worker module', () => {
       1000 * STALE_AFTER_INTERVALS,
     );
     await vi.advanceTimersByTimeAsync(2000);
-    expect(redis.set).toHaveBeenCalledTimes(3);
+    expect(redis.set).toHaveBeenCalledTimes(4);
     await moduleRef.close();
   });
 
@@ -94,7 +101,7 @@ describe('HeartbeatService in the worker module', () => {
     expect(redis.del).toHaveBeenCalledWith('smsvio:worker:heartbeat:worker-1');
     expect(redis.quit).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(5000);
-    expect(redis.set).toHaveBeenCalledTimes(1);
+    expect(redis.set).toHaveBeenCalledTimes(2);
   });
 
   it('logs and survives a failed beat', async () => {
@@ -103,7 +110,7 @@ describe('HeartbeatService in the worker module', () => {
     const moduleRef = await start();
     expect(errorSpy).toHaveBeenCalledWith('Heartbeat failed: READONLY');
     await vi.advanceTimersByTimeAsync(1000);
-    expect(redis.set).toHaveBeenCalledTimes(2);
+    expect(redis.set).toHaveBeenCalledTimes(3);
     await moduleRef.close();
   });
 

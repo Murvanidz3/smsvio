@@ -109,6 +109,7 @@ services:
       target: worker
     environment:
       <<: *release-env
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
     healthcheck:
       test: ['CMD', 'node', 'dist/healthcheck.js']
@@ -118,6 +119,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
 

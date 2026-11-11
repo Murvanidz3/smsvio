@@ -1,0 +1,66 @@
+import type { Page } from '@playwright/test';
+
+import { expect, test } from './fixtures';
+
+const destinations: Record<string, { iso: string; name: string }> = {
+  'desktop-light': { iso: 'DE', name: 'Germany' },
+  'desktop-dark': { iso: 'FR', name: 'France' },
+  'mobile-light': { iso: 'JP', name: 'Japan' },
+  'mobile-dark': { iso: 'AU', name: 'Australia' },
+};
+
+async function openDashboardLink(page: Page, name: string): Promise<void> {
+  const visible = page.getByRole('link', { name, exact: true }).filter({ visible: true });
+  if ((await visible.count()) === 0) {
+    await page.getByRole('button', { name: 'Open menu' }).click();
+  }
+  await page.getByRole('link', { name, exact: true }).filter({ visible: true }).click();
+}
+
+test.describe('senders and admin pricing', () => {
+  test('enables a country and shows the priced route', async ({ page }, testInfo) => {
+    const destination = destinations[testInfo.project.name] ?? destinations['desktop-light'];
+    if (destination === undefined) {
+      throw new Error('Missing destination.');
+    }
+    await page.goto('/signin');
+    await page.getByLabel('Email').fill('admin@smsvio.test');
+    await page.getByLabel('Password').fill('smsvio-demo-local');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page).toHaveURL('/dashboard');
+
+    await openDashboardLink(page, 'Senders');
+    await expect(page.getByRole('heading', { name: 'Senders', exact: true })).toBeVisible();
+    const countryCell = page.getByRole('cell', { name: destination.name });
+    if ((await countryCell.count()) === 0) {
+      await page.getByRole('button', { name: 'Add country' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Add a country' });
+      await dialog.getByLabel('Country').selectOption(destination.iso);
+      await dialog.getByRole('button', { name: 'Enable country' }).click();
+    }
+    await expect(countryCell).toBeVisible();
+
+    await page.getByRole('link', { name: 'Admin', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
+    await page.getByRole('button', { name: 'Credit' }).first().click();
+    const adjust = page.getByRole('dialog', { name: /Adjust / });
+    await adjust.getByLabel('Amount').fill('1.00');
+    await adjust.getByLabel('Reason').fill('Phase 3 balance check');
+    await adjust.getByRole('button', { name: 'Apply' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Credited 1.00 USD.' })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Providers', exact: true }).click();
+    await expect(page.getByRole('cell', { name: 'mock', exact: true })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Routes', exact: true }).click();
+    await page.getByLabel('Search').fill(destination.name);
+    await expect(page.getByText('0.0150').first()).toBeVisible();
+    await expect(page.getByText('50% provider').first()).toBeVisible();
+
+    await page.getByRole('link', { name: 'Rates', exact: true }).click();
+    await page.getByLabel('Search').fill(destination.name);
+    const rateRow = page.getByRole('row', { name: destination.name });
+    await expect(rateRow.getByRole('cell', { name: 'computed', exact: true })).toBeVisible();
+    await expect(rateRow.getByRole('cell', { name: '0.0150' })).toBeVisible();
+  });
+});

@@ -19,6 +19,7 @@
     "@nestjs/common": "^12.4.2",
     "@nestjs/core": "^12.4.2",
     "@sentry/nestjs": "11.11.0",
+    "@smsvio/db": "workspace:*",
     "@smsvio/server": "workspace:*",
     "@smsvio/shared": "workspace:*",
     "ioredis": "^6.0.0",

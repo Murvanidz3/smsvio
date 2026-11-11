@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { createPrismaClient, type PrismaClient } from '@smsvio/db';
 import request, { type Agent, type Response } from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -15,6 +16,7 @@ const mailDir = mkdtempSync(join(tmpdir(), 'smsvio-int-'));
 const tokenPattern = /token=([A-Za-z0-9_-]+)/;
 
 let app: NestFastifyApplication;
+let prisma: PrismaClient;
 
 function record(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null) {
@@ -67,6 +69,18 @@ async function openAccount(
 }
 
 beforeAll(async () => {
+  prisma = createPrismaClient({ connectionString: process.env.DATABASE_URL ?? '' });
+  await prisma.country.upsert({
+    where: { iso2: 'ZZ' },
+    create: {
+      iso2: 'ZZ',
+      name: 'Testland',
+      dialCode: '999',
+      alphaSenderAllowed: true,
+      registrationRequired: false,
+    },
+    update: { enabled: true, alphaSenderAllowed: true },
+  });
   app = await createApp(
     loadApiEnv({
       ...process.env,
@@ -86,6 +100,14 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  try {
+    await prisma.country.delete({ where: { iso2: 'ZZ' } });
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes('Foreign key')) {
+      throw error;
+    }
+  }
+  await prisma.$disconnect();
   await app.close();
 });
 
@@ -193,6 +215,53 @@ describe('tenant isolation against Postgres', () => {
       .set('origin', ORIGIN)
       .set('x-csrf-token', bea.csrf)
       .send({ confirmName: `Bea Catalog ${stamp}` })
+      .expect(200);
+  });
+
+  it('hides another organization sender and enabled country', async () => {
+    const stamp = Date.now().toString(36);
+    const ada = await openAccount(`ada-sender-${stamp}@example.com`, `Ada Sender ${stamp}`);
+    const bea = await openAccount(`bea-sender-${stamp}@example.com`, `Bea Sender ${stamp}`);
+
+    const country = await ada.agent
+      .post('/api/internal/org-countries')
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', ada.csrf)
+      .send({ countryIso2: 'ZZ', senderId: null })
+      .expect(200);
+    const sender = await ada.agent
+      .post('/api/internal/sender-ids')
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', ada.csrf)
+      .send({
+        type: 'ALPHANUMERIC',
+        value: 'NOTIFY',
+        useCase: 'Order updates for the isolation test.',
+        countries: ['ZZ'],
+      })
+      .expect(200);
+    const orgCountryId = String(record(country.body).id);
+    const senderId = String(record(sender.body).id);
+
+    await bea.agent.get(`/api/internal/sender-ids/${senderId}`).expect(404);
+    await bea.agent
+      .delete(`/api/internal/org-countries/${orgCountryId}`)
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', bea.csrf)
+      .expect(404);
+    await ada.agent.get(`/api/internal/sender-ids/${senderId}`).expect(200);
+
+    await ada.agent
+      .post('/api/internal/organization/delete')
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', ada.csrf)
+      .send({ confirmName: `Ada Sender ${stamp}` })
+      .expect(200);
+    await bea.agent
+      .post('/api/internal/organization/delete')
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', bea.csrf)
+      .send({ confirmName: `Bea Sender ${stamp}` })
       .expect(200);
   });
 });
