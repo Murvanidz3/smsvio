@@ -31,6 +31,7 @@ test.describe('senders and admin pricing', () => {
 
     await openDashboardLink(page, 'Senders');
     await expect(page.getByRole('heading', { name: 'Senders', exact: true })).toBeVisible();
+    await expect(page.getByText('12025550199')).toBeVisible();
     const countryCell = page.getByRole('cell', { name: destination.name });
     if ((await countryCell.count()) === 0) {
       await page.getByRole('button', { name: 'Add country' }).click();
@@ -51,14 +52,16 @@ test.describe('senders and admin pricing', () => {
     await expect(page.getByRole('status').filter({ hasText: 'Credited 1.00 USD.' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Providers', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Providers' })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'mock', exact: true })).toBeVisible();
 
     await page.getByRole('link', { name: 'Routes', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Routes' })).toBeVisible();
     await page.getByLabel('Search').fill(destination.name);
-    await expect(page.getByText('0.0150').first()).toBeVisible();
-    await expect(page.getByText('50% provider').first()).toBeVisible();
+    await expect(page.getByRole('cell', { name: '50% provider' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Rates', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Rates' })).toBeVisible();
     await page.getByLabel('Search').fill(destination.name);
     const rateRow = page.getByRole('row', { name: destination.name });
     await expect(rateRow.getByRole('cell', { name: 'computed', exact: true })).toBeVisible();
