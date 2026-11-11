@@ -119,6 +119,8 @@ maxretry = 5
 
 [sshd]
 enabled = true
+# Ubuntu 24.04 runs the daemon as ssh.service; fail2ban's default filter only matches sshd.service.
+journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd
 EOF
 systemctl enable fail2ban >/dev/null
 systemctl restart fail2ban
