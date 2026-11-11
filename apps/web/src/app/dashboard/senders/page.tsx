@@ -189,9 +189,9 @@ export default function SendersPage() {
         </table>
       </div>
       {adding ? (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 px-4 py-8">
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4">
           <div
-            className="bg-popover mx-auto w-full max-w-md rounded-xl border p-5"
+            className="bg-popover w-full max-w-md rounded-xl border p-5"
             role="dialog"
             aria-labelledby="add-country-title"
           >
@@ -209,7 +209,11 @@ export default function SendersPage() {
                 }}
               />
             </label>
-            <ul className="mt-2 grid gap-1" role="listbox" aria-label="Matching countries">
+            <ul
+              className="mt-2 grid max-h-40 gap-1 overflow-y-auto"
+              role="listbox"
+              aria-label="Matching countries"
+            >
               {countryMatches.map((row) => (
                 <li key={row.iso2}>
                   <button
@@ -314,7 +318,7 @@ function RequestSender({
   const [useCase, setUseCase] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/40 px-4 py-8">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4">
       <form
         className="bg-popover w-full max-w-md rounded-xl border p-5"
         role="dialog"
