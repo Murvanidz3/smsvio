@@ -31,7 +31,7 @@ test.describe('senders and admin pricing', () => {
 
     await openDashboardLink(page, 'Senders');
     await expect(page.getByRole('heading', { name: 'Senders', exact: true })).toBeVisible();
-    await expect(page.getByText('12025550199')).toBeVisible();
+    await expect(page.getByText('The shared number is 12025550199.')).toBeVisible();
     const countryCell = page.getByRole('cell', { name: destination.name });
     if ((await countryCell.count()) === 0) {
       await page.getByRole('button', { name: 'Add country' }).click();
