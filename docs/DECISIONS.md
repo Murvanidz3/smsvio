@@ -244,3 +244,42 @@ This machine does not have Docker and does not run a local stack. Before a phase
 complete, lint, typecheck, unit tests, and `pnpm build` run here. Playwright, the Postgres
 integration tests, and the fresh-clone Compose smoke test run in GitHub Actions on every push
 to `main` and must pass there. The deploy job does not start unless all three succeed.
+
+## Phase 2 — SMS library, contacts, templates, lookup (2026-11-11)
+
+- The SMS library lives in `@smsvio/shared`. The Next.js client imports encoding, templates, and
+  CSV from the main barrel. `libphonenumber-js/max` and the time-zone table are only on
+  `@smsvio/shared/phone`, which the API and the seed import. Account forms still check the
+  E.164 shape with the existing regex so the browser bundle stays small. When email can be
+  sent, `startPhone` also normalises the number with libphonenumber before it stores it. While
+  `EMAIL_MODE=disabled` the existing `403 phone_unavailable` response still returns first.
+- Time zones come from the Apache-2.0 libphonenumber `map_data.txt`, vendored as
+  `packages/shared/src/sms/timezone-prefixes.ts`. The longest matching prefix wins. The region
+  is the city of that zone when exactly one zone matches, and null when several do.
+- Seed data marks US and CA as alphanumeric-sender blocked and registration required, because
+  those carriers do not accept alphanumeric sender ids. Every other country starts allowed and
+  not requiring registration. The rows are initial data. `createMany` with `skipDuplicates`
+  loads them and does not overwrite a later operator edit. Countries are seeded even when
+  `SEED_ADMIN_PASSWORD` is empty.
+- The sample gallery is the `TEMPLATE_GALLERY` constant, not a database table, so it does not
+  depend on the demo seed. Copying a sample creates a draft.
+- `AUTO_APPROVE_TEMPLATES` defaults to `false`, including in both Compose files, so a missing
+  production variable leaves templates pending for the operator. `.env.example` and the
+  Playwright API set it to `true`. Production `/opt/smsvio/.env` was not regenerated.
+- `Message` exists now so contact history and template analytics are real queries. There is no
+  send pipeline. `providerId`, `routeId`, and `apiKeyId` are optional ids without foreign keys,
+  because those tables arrive with sending.
+- Saving a pending or approved template returns it to `DRAFT` and clears the rejection note.
+  Submit rejects `message_too_long`. A draft may keep a body that is over the segment cap.
+  Only `APPROVED` templates are sendable, and sending itself is Phase 3.
+- A CSV import returns the rows it rejected, including duplicates in the file or already stored.
+  It does not skip them silently. Opt-out is shown and can be filtered. There is no toggle
+  until keyword handling exists.
+- Template analytics are an SVG bar chart. Recharts is not installed. The shell links only to
+  pages that exist: Overview, Templates, Contacts, Users, Settings, Number lookup, and support
+  mail.
+- Number lookup is limited to 30 requests a minute per signed-in user. The key is
+  `smsvio:rl:lookup:<userId>`.
+- The editor's API tab shows cURL, Node, and Python for `POST /api/v1/messages`. That route is
+  not implemented until the public API phase. The snippets are the request the editor is
+  specified to show.

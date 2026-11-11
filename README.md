@@ -4,22 +4,23 @@ SMSVIO is a business SMS platform: one dashboard and one API for sending message
 repository holds the whole product — web app, API, background worker, database schema and the
 infrastructure that runs it at [smsvio.com](https://smsvio.com).
 
-The build follows the phases in [`docs/SPEC.md`](docs/SPEC.md). **Phase 1 (accounts and shell)**
-is complete: sign-up, email verification, sign-in, password reset, two-factor authentication,
-sessions, organizations, invitations, the dashboard shell, users, settings, and the audit log.
-Phase 0 (foundation, Docker, CI/CD, and production hosting) remains underneath it.
+The build follows the phases in [`docs/SPEC.md`](docs/SPEC.md). **Phase 2 (SMS library,
+contacts, templates, and number lookup)** is complete. People can save contacts, import a CSV,
+draft and submit templates, and look up a number offline. Phase 1 (accounts and shell) and
+Phase 0 (foundation, Docker, CI/CD, and production hosting) remain underneath it. Sending
+starts in Phase 3.
 
 ## Repository layout
 
 ```
 apps/
-  web/        Next.js 16 app: landing page, accounts, and the dashboard shell
+  web/        Next.js 16 app: landing page, accounts, contacts, templates, and number lookup
   api/        NestJS + Fastify REST API (/api/*, /healthz, /readyz)
-  worker/     NestJS background worker (queues from Phase 2)
+  worker/     NestJS background worker (queues from Phase 3)
   migrate/    One-shot container: Prisma migrations, then the demo seed
 packages/
   config/     Shared ESLint, Prettier and TypeScript presets
-  shared/     Env validation, auth schemas, passwords, roles, and error helpers
+  shared/     Env validation, auth schemas, the SMS library, passwords, roles, and error helpers
   db/         Prisma schema, migrations and client factory
   server/     NestJS modules shared by api and worker: logging, Prisma, Redis, probes, Sentry
 infra/
@@ -72,8 +73,11 @@ startup and exit with a list of the invalid keys. `PUBLIC_ORIGIN` in that file i
 match `http://localhost:8080`.
 
 `pnpm --filter @smsvio/db migrate:deploy` applies migrations only. `node apps/migrate/seed.mjs`
-applies migrations and then creates the demo account when `SEED_ADMIN_EMAIL` is set. It does not
-change the password of an account that already exists.
+applies migrations, seeds countries, and then creates the demo account when `SEED_ADMIN_EMAIL`
+and `SEED_ADMIN_PASSWORD` are set. It does not change the password of an account that already
+exists, and it does not overwrite a country row that is already stored.
+`AUTO_APPROVE_TEMPLATES=true` in `.env.example` approves a template when it is submitted. Leave
+it false to keep the template pending for an operator.
 
 Create a migration after changing `packages/db/prisma/schema.prisma`:
 
