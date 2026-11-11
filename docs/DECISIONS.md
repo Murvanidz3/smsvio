@@ -132,6 +132,8 @@ with its reason. Newest phase last.
   `rollback.sh` if they fail.
 - The server logs in to GHCR with the deploy job's short-lived `GITHUB_TOKEN` and logs out after
   the deploy, so no long-lived registry credential exists on the server.
+- GHCR created the packages public on the first push because the repository is public. The owner
+  switches them to private in the GitHub UI (there is no API for it); deploys work either way.
 - CI runs on pull requests and on `main`: lint, typecheck, unit tests with coverage thresholds,
   build, shellcheck, production compose validation, integration tests, Playwright in four
   projects, and a fresh-clone `docker compose up` smoke test. Images and the deploy run only on

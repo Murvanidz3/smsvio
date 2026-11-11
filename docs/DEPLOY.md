@@ -135,10 +135,16 @@ Verify the host key before trusting it: the fingerprint printed by
 GHCR needs no secret. The workflow pushes with its own `GITHUB_TOKEN`, logs the server in with
 that short-lived token for the pull, and logs it out again afterwards.
 
-Images are private. After the first push, check **GitHub → your profile → Packages**: each
-`smsvio-*` package must show _Private_. If one is public, open it → **Package settings →
-Change visibility → Private**, and under **Manage Actions access** make sure the `smsvio`
-repository has at least _Read_ access.
+Images must be private. Because the repository is public, GHCR creates each `smsvio-*` package
+as **public** on the first push, and GitHub offers no API to change that. After the first push,
+for each of the five packages open **GitHub → your profile → Packages → package → Package
+settings**, choose **Change visibility → Private**, and under **Manage Actions access** make sure
+the `smsvio` repository has at least _Read_ access. Check with an anonymous pull, which must be
+refused once the package is private:
+
+```bash
+docker logout ghcr.io; docker pull ghcr.io/murvanidz3/smsvio-web:<sha>   # expect "denied"
+```
 
 ### 1.6 First deploy
 
