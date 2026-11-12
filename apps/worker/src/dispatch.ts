@@ -31,8 +31,13 @@ export interface SendRedis {
 }
 
 type Tx = Prisma.TransactionClient;
+type RouteRow = Awaited<ReturnType<PrismaClient['route']['findMany']>>[number];
+type ProviderRow = Awaited<ReturnType<PrismaClient['provider']['findMany']>>[number];
 
 const STUCK_MS = 45_000;
+const SENDS_PER_TICK = 40;
+const SEND_CONCURRENCY = 4;
+const SIDE_EFFECTS_PER_TICK = 80;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -46,15 +51,7 @@ export async function runSendTick(
 ): Promise<void> {
   await promote(redis, now);
   await deliverCallbacks(redis, now);
-  for (let count = 0; count < 40; count += 1) {
-    const id = await redis.rpop(SEND_QUEUE_KEY);
-    if (id === null) {
-      break;
-    }
-    await withLock(redis, id, async () => {
-      await dispatchMessage(prisma, redis, id, now);
-    });
-  }
+  await sendQueued(prisma, redis, now);
   await applyReceipts(prisma, redis, now);
   await expireSent(prisma, now);
   await requeueStuck(prisma, redis, now);
@@ -62,12 +59,44 @@ export async function runSendTick(
 
 async function promote(redis: SendRedis, now: number): Promise<void> {
   const due = await redis.zrangebyscore(SEND_DELAY_KEY, 0, now);
-  for (const id of due) {
+  for (const id of due.slice(0, SIDE_EFFECTS_PER_TICK)) {
     const removed = await redis.zrem(SEND_DELAY_KEY, id);
     if (removed === 1) {
       await redis.lpush(SEND_QUEUE_KEY, id);
     }
   }
+}
+
+async function sendQueued(prisma: PrismaClient, redis: SendRedis, now: number): Promise<void> {
+  const ids: string[] = [];
+  for (let count = 0; count < SENDS_PER_TICK; count += 1) {
+    const id = await redis.rpop(SEND_QUEUE_KEY);
+    if (id === null) {
+      break;
+    }
+    ids.push(id);
+  }
+  if (ids.length === 0) {
+    return;
+  }
+  const [routes, providers] = await Promise.all([
+    prisma.route.findMany(),
+    prisma.provider.findMany(),
+  ]);
+  let next = 0;
+  const run = async (): Promise<void> => {
+    for (;;) {
+      const id = ids.at(next);
+      next += 1;
+      if (id === undefined) {
+        return;
+      }
+      await withLock(redis, id, async () => {
+        await dispatchMessage(prisma, redis, id, now, routes, providers);
+      });
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(SEND_CONCURRENCY, ids.length) }, () => run()));
 }
 
 async function withLock(redis: SendRedis, id: string, run: () => Promise<void>): Promise<void> {
@@ -87,6 +116,8 @@ async function dispatchMessage(
   redis: SendRedis,
   id: string,
   now: number,
+  routes: RouteRow[],
+  providers: ProviderRow[],
 ): Promise<void> {
   const message = await prisma.message.findUnique({ where: { id } });
   if (message === null || (message.status !== 'QUEUED' && message.status !== 'SENDING')) {
@@ -104,26 +135,18 @@ async function dispatchMessage(
       data: { messageId: id, status: 'SENDING', detail: 'Handed to the provider.' },
     });
   }
-  const current = await prisma.message.findUnique({ where: { id } });
-  if (current?.status !== 'SENDING') {
-    return;
-  }
-  const [routes, providers] = await Promise.all([
-    prisma.route.findMany(),
-    prisma.provider.findMany(),
-  ]);
   const providerById = new Map(providers.map((provider) => [provider.id, provider]));
   const candidates = orderedRoutes(
     routes.filter((route) => {
       const provider = providerById.get(route.providerId);
       return route.enabled && provider?.status === 'ACTIVE' && provider.type === 'MOCK';
     }),
-    current.countryIso2 ?? '',
-    current.mccmnc,
-  ).filter((route) => !current.failedRouteIds.includes(route.id));
+    message.countryIso2 ?? '',
+    message.mccmnc,
+  ).filter((route) => !message.failedRouteIds.includes(route.id));
 
-  let failed = [...current.failedRouteIds];
-  let attempt = current.attempt;
+  let failed = [...message.failedRouteIds];
+  let attempt = message.attempt;
   for (const route of candidates) {
     const provider = providerById.get(route.providerId);
     if (provider === undefined) {
@@ -143,14 +166,14 @@ async function dispatchMessage(
       callbackSecretHash: provider.callbackSecretHash,
     });
     const result = await mock.send({
-      to: current.to,
-      from: current.fromSender,
-      body: current.body,
-      encoding: current.encoding,
-      segments: current.segments,
+      to: message.to,
+      from: message.fromSender,
+      body: message.body,
+      encoding: message.encoding,
+      segments: message.segments,
     });
     if (result.status === 'accepted') {
-      await markSent(prisma, redis, current, route.id, provider.id, route.costMicros, result, now);
+      await markSent(prisma, redis, message, route.id, provider.id, route.costMicros, result, now);
       return;
     }
     if (result.status === 'temporary_failure' && attempt + 1 < SEND_ATTEMPTS_PER_ROUTE) {
@@ -166,7 +189,7 @@ async function dispatchMessage(
       data: { failedRouteIds: failed, attempt: 0 },
     });
   }
-  await markFailed(prisma, current, 'no_route');
+  await markFailed(prisma, message, 'no_route');
 }
 
 async function markSent(
@@ -217,31 +240,35 @@ async function markSent(
 
 async function deliverCallbacks(redis: SendRedis, now: number): Promise<void> {
   const due = await redis.zrangebyscore(CALLBACK_DELAY_KEY, 0, now);
-  for (const member of due) {
-    const removed = await redis.zrem(CALLBACK_DELAY_KEY, member);
-    if (removed !== 1) {
-      continue;
-    }
-    let payload: { id?: unknown; status?: unknown };
-    try {
-      payload = JSON.parse(member) as { id?: unknown; status?: unknown };
-    } catch {
-      continue;
-    }
-    if (typeof payload.id !== 'string' || typeof payload.status !== 'string') {
-      continue;
-    }
-    const posted = await postMockCallback({ id: payload.id, status: payload.status });
-    if (posted) {
-      continue;
-    }
-    const base = process.env.API_INTERNAL_URL;
-    if (base === undefined || base === '') {
-      await redis.zadd(RECEIPT_QUEUE_KEY, now, receiptMember(payload.status, payload.id));
-      continue;
-    }
-    await redis.zadd(CALLBACK_DELAY_KEY, now + 1000, member);
+  await Promise.all(
+    due.slice(0, SIDE_EFFECTS_PER_TICK).map((member) => deliverCallback(redis, now, member)),
+  );
+}
+
+async function deliverCallback(redis: SendRedis, now: number, member: string): Promise<void> {
+  const removed = await redis.zrem(CALLBACK_DELAY_KEY, member);
+  if (removed !== 1) {
+    return;
   }
+  let payload: { id?: unknown; status?: unknown };
+  try {
+    payload = JSON.parse(member) as { id?: unknown; status?: unknown };
+  } catch {
+    return;
+  }
+  if (typeof payload.id !== 'string' || typeof payload.status !== 'string') {
+    return;
+  }
+  const posted = await postMockCallback({ id: payload.id, status: payload.status });
+  if (posted) {
+    return;
+  }
+  const base = process.env.API_INTERNAL_URL;
+  if (base === undefined || base === '') {
+    await redis.zadd(RECEIPT_QUEUE_KEY, now, receiptMember(payload.status, payload.id));
+    return;
+  }
+  await redis.zadd(CALLBACK_DELAY_KEY, now + 1000, member);
 }
 
 async function postMockCallback(body: { id: string; status: string }): Promise<boolean> {
@@ -288,7 +315,7 @@ async function markFailed(
 
 async function applyReceipts(prisma: PrismaClient, redis: SendRedis, now: number): Promise<void> {
   const due = await redis.zrangebyscore(RECEIPT_QUEUE_KEY, 0, now);
-  for (const member of due) {
+  for (const member of due.slice(0, SIDE_EFFECTS_PER_TICK)) {
     const removed = await redis.zrem(RECEIPT_QUEUE_KEY, member);
     if (removed !== 1) {
       continue;
@@ -376,15 +403,13 @@ async function settle(
   type: 'CHARGE' | 'RELEASE',
   note: string,
 ): Promise<void> {
-  const existing = await tx.ledgerEntry.findFirst({
-    where: { organizationId, refId: messageId, type: { in: ['CHARGE', 'RELEASE'] } },
+  const entries = await tx.ledgerEntry.findMany({
+    where: { organizationId, refId: messageId, type: { in: ['HOLD', 'CHARGE', 'RELEASE'] } },
   });
-  if (existing !== null) {
+  if (entries.some((entry) => entry.type === 'CHARGE' || entry.type === 'RELEASE')) {
     return;
   }
-  const hold = await tx.ledgerEntry.findFirst({
-    where: { organizationId, refId: messageId, type: 'HOLD' },
-  });
+  const hold = entries.find((entry) => entry.type === 'HOLD');
   if (hold?.amountMicros !== -amount) {
     return;
   }

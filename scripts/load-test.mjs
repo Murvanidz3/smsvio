@@ -214,12 +214,20 @@ async function sendAll(templateId) {
 }
 
 async function drain() {
-  const deadline = Date.now() + 8 * 60 * 1000;
+  const deadline = Date.now() + 15 * 60 * 1000;
   let pending = '';
+  let loggedAt = 0;
   while (Date.now() < deadline) {
     pending = sql("SELECT count(*) FROM messages WHERE status IN ('QUEUED', 'SENDING', 'SENT')");
     if (pending === '0') {
       return;
+    }
+    if (Date.now() - loggedAt >= 30_000) {
+      loggedAt = Date.now();
+      const counts = sql(
+        `SELECT status || ':' || count(*) FROM messages WHERE "clientRef" LIKE 'load-%' GROUP BY status ORDER BY status`,
+      );
+      console.log(JSON.stringify({ pending: Number(pending), counts }));
     }
     await new Promise((resolve) => {
       setTimeout(resolve, 5000);

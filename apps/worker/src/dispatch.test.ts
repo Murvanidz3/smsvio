@@ -163,6 +163,10 @@ function harness() {
               : where.type.in.includes(row.type);
           }) ?? null,
         ),
+      findMany: ({ where }: { where: { refId: string; type: { in: string[] } } }) =>
+        Promise.resolve(
+          ledger.filter((row) => row.refId === where.refId && where.type.in.includes(row.type)),
+        ),
       create: ({ data }: { data: { type: string; refId: string; amountMicros: bigint } }) => {
         ledger.push(data);
         return Promise.resolve(data);

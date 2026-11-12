@@ -137,7 +137,7 @@ services:
     environment:
       <<: *release-env
       DATABASE_URL: postgresql://smsvio:${POSTGRES_PASSWORD}@postgres:5432/smsvio
-      DATABASE_POOL_MAX: '2'
+      DATABASE_POOL_MAX: '8'
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       API_INTERNAL_URL: http://api:4000
     tmpfs:
