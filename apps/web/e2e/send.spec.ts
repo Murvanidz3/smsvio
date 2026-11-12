@@ -13,7 +13,7 @@ async function openDashboardLink(page: Page, name: string): Promise<void> {
 test('sends an approved template and shows it as delivered', async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   const phone = '+4915123456789';
-  const templateName = `Hello ${testInfo.project.name}`;
+  const templateName = `Hello ${testInfo.project.name} ${String(testInfo.retry)}`;
   await page.goto('/signin');
   await page.getByLabel('Email').fill('admin@smsvio.test');
   await page.getByLabel('Password').fill('smsvio-demo-local');
@@ -36,9 +36,11 @@ test('sends an approved template and shows it as delivered', async ({ page }, te
   await openDashboardLink(page, 'Admin');
   const demo = page.getByRole('row', { name: /SMSVIO Demo/ });
   const activate = demo.getByRole('button', { name: 'Activate' });
+  const suspend = demo.getByRole('button', { name: 'Suspend' });
+  await expect(activate.or(suspend)).toBeVisible();
   if (await activate.isVisible()) {
     await activate.click();
-    await expect(demo.getByRole('button', { name: 'Suspend' })).toBeVisible();
+    await expect(suspend).toBeVisible();
   }
   await demo.getByRole('button', { name: 'Credit' }).click();
   const adjust = page.getByRole('dialog', { name: /Adjust / });
@@ -59,8 +61,16 @@ test('sends an approved template and shows it as delivered', async ({ page }, te
   await expect(page.getByText('APPROVED', { exact: true })).toBeVisible();
 
   await openDashboardLink(page, 'Send');
-  await page.getByLabel('Template').selectOption({ label: templateName });
-  await page.getByLabel('Phone number').fill(phone);
+  await expect(page).toHaveURL('/dashboard/send');
+  const template = page.getByRole('combobox', { name: 'Template', exact: true });
+  await expect(template.locator('option', { hasText: templateName })).toHaveCount(1);
+  await template.selectOption({ label: templateName });
+  await page.getByLabel('Phone number', { exact: true }).fill(phone);
+  const problem = page.locator('p.text-destructive');
+  await expect(page.getByText(/USD from/).or(problem)).toBeVisible({ timeout: 15_000 });
+  if (await problem.isVisible()) {
+    throw new Error(await problem.textContent() ?? 'The preview was rejected.');
+  }
   const send = page.getByRole('button', { name: 'Send', exact: true });
   await expect(send).toBeEnabled();
   await send.click();
