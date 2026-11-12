@@ -21,12 +21,14 @@ test('sends an approved template and shows it as delivered', async ({ page }, te
   await expect(page).toHaveURL('/dashboard');
 
   await openDashboardLink(page, 'Senders');
+  await expect(page.getByRole('heading', { name: 'Senders', exact: true })).toBeVisible();
+  await expect(page.getByText('The shared number is 12025550199.')).toBeVisible();
   const countryCell = page.getByRole('cell', { name: 'Germany' });
   if ((await countryCell.count()) === 0) {
     await page.getByRole('button', { name: 'Add country' }).click();
     const dialog = page.getByRole('dialog', { name: 'Add a country' });
     await dialog.getByLabel('Country').fill('Germany');
-    await dialog.getByRole('option', { name: 'Germany' }).click();
+    await dialog.getByRole('option', { name: /Germany/ }).click();
     await dialog.getByRole('button', { name: 'Enable country' }).click();
   }
   await expect(countryCell).toBeVisible();
