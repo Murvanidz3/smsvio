@@ -5,12 +5,11 @@ repository holds the whole product — web app, API, background worker, database
 infrastructure that runs it at [smsvio.com](https://smsvio.com).
 
 The build follows the phases in [`docs/SPEC.md`](docs/SPEC.md). **Phase 3 part B (the send
-pipeline, Send, and Messages)** is in place on top of part A (providers, routes, rates, senders,
-and balances). An accepted message is reserved, handed to the worker, and charged once when the
-simulated provider accepts it. Part A is still the live release until this part is deployed. The
-part A record is [`docs/reports/phase-3a.md`](docs/reports/phase-3a.md). Phase 2 (contacts,
-templates, and number lookup), Phase 1 (accounts), and Phase 0 (foundation and production hosting)
-remain underneath it.
+pipeline, Send, and Messages)** is the live release. An accepted message is reserved, handed to
+the worker, and charged once when the simulated provider accepts it. The record is
+[`docs/reports/phase-3b.md`](docs/reports/phase-3b.md). Phase 3 part A (providers, routes, rates,
+senders, and balances), Phase 2 (contacts, templates, and number lookup), Phase 1 (accounts), and
+Phase 0 (foundation and production hosting) remain underneath it.
 
 ## Repository layout
 

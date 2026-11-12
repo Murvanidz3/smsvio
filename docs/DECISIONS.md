@@ -369,5 +369,9 @@ to `main` and must pass there. The deploy job does not start unless all three su
   account phone. The admin Organizations screen can set that organization to `ACTIVE`.
 - Message validity is 72 hours. A temporary failure retries the same route three times, then the next
   route. A permanent failure moves on immediately. No remaining route fails the message with
-  `no_route`. The in-memory burst used by the worker test is the double-charge proof. A ten-minute
-  100-per-second run is not part of CI.
+  `no_route`. The worker reads the route catalog once per batch. Receipt lookup uses an index on
+  `providerMessageId`. The in-memory burst used by the worker test is still a double-charge check.
+  The ten-minute run is a manually triggered workflow against the local Compose stack and never
+  against production. [Load test run 43228126966](https://github.com/Murvanidz3/smsvio/actions/runs/43228126966)
+  on `e418d00` accepted 60,000 messages, rejected 0, and measured 0 lost messages, 0 double charges,
+  and 0 ledger-versus-balance differences.
