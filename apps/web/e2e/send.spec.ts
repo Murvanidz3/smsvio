@@ -69,12 +69,17 @@ test('sends an approved template and shows it as delivered', async ({ page }, te
   const problem = page.locator('p.text-destructive');
   await expect(page.getByText(/USD from/).or(problem)).toBeVisible({ timeout: 15_000 });
   if (await problem.isVisible()) {
-    throw new Error(await problem.textContent() ?? 'The preview was rejected.');
+    throw new Error((await problem.textContent()) ?? 'The preview was rejected.');
   }
   const send = page.getByRole('button', { name: 'Send', exact: true });
   await expect(send).toBeEnabled();
   await send.click();
-  await expect(page.getByText('delivered', { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page
+      .locator('aside')
+      .getByRole('paragraph')
+      .filter({ hasText: /^delivered$/ }),
+  ).toBeVisible({ timeout: 20_000 });
 
   await openDashboardLink(page, 'Messages');
   await page.getByLabel('Search').fill(phone);
