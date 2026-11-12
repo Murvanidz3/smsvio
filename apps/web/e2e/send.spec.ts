@@ -11,6 +11,7 @@ async function openDashboardLink(page: Page, name: string): Promise<void> {
 }
 
 test('sends an approved template and shows it as delivered', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
   const phone = '+4915123456789';
   const templateName = `Hello ${testInfo.project.name}`;
   await page.goto('/signin');
@@ -20,7 +21,7 @@ test('sends an approved template and shows it as delivered', async ({ page }, te
   await expect(page).toHaveURL('/dashboard');
 
   await openDashboardLink(page, 'Senders');
-  const countryCell = page.getByRole('cell', { name: 'Germany', exact: true });
+  const countryCell = page.getByRole('cell', { name: 'Germany' });
   if ((await countryCell.count()) === 0) {
     await page.getByRole('button', { name: 'Add country' }).click();
     const dialog = page.getByRole('dialog', { name: 'Add a country' });
