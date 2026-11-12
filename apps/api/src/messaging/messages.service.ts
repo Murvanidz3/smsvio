@@ -1,8 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import type { Prisma } from '@smsvio/db';
-import type { PrismaClient } from '@smsvio/db';
+import { Prisma, type PrismaClient } from '@smsvio/db';
 import { SMS_ERRORS, smsErrorMessage, type SmsErrorCode } from '@smsvio/shared';
 import { PRISMA, REDIS } from '@smsvio/server';
 import type { Redis } from 'ioredis';
@@ -46,7 +45,11 @@ export class MessageQueryService {
 
   async list(state: AuthState, query: ListQuery) {
     assertCapability(state, 'view');
-    const where = this.where(state.organizationId, query);
+    const where = this.where(
+      state.organizationId,
+      query,
+      await this.idsWithPrefix(state.organizationId, query.q),
+    );
     const [total, rows] = await Promise.all([
       this.prisma.message.count({ where }),
       this.prisma.message.findMany({
@@ -104,7 +107,11 @@ export class MessageQueryService {
     query: ListQuery,
   ): Promise<{ kind: 'csv'; body: string } | { kind: 'queued'; message: string }> {
     assertCapability(state, 'view');
-    const where = this.where(state.organizationId, query);
+    const where = this.where(
+      state.organizationId,
+      query,
+      await this.idsWithPrefix(state.organizationId, query.q),
+    );
     const total = await this.prisma.message.count({ where });
     const rows = await this.prisma.message.findMany({
       where,
@@ -129,7 +136,11 @@ export class MessageQueryService {
     return { kind: 'queued', message: 'We emailed the download link. It expires in 24 hours.' };
   }
 
-  private where(organizationId: string, query: ListQuery): Prisma.MessageWhereInput {
+  private where(
+    organizationId: string,
+    query: ListQuery,
+    prefixIds: readonly string[],
+  ): Prisma.MessageWhereInput {
     const needle = query.q?.trim();
     return {
       organizationId,
@@ -143,17 +154,31 @@ export class MessageQueryService {
       ...(query.templateId === undefined ? {} : { templateId: query.templateId }),
       ...(query.apiKeyId === undefined ? {} : { apiKeyId: query.apiKeyId }),
       ...createdBetween(query.from, query.to),
-      ...(needle === undefined || needle === ''
-        ? {}
-        : {
-            OR: [
-              { id: needle },
-              { to: { contains: needle } },
-              { fromSender: { contains: needle } },
-            ],
-          }),
+      ...(needle === undefined || needle === '' ? {} : { OR: searchClauses(needle, prefixIds) }),
     };
   }
+
+  private async idsWithPrefix(organizationId: string, raw: string | undefined): Promise<string[]> {
+    const needle = raw?.trim() ?? '';
+    if (!/^[0-9a-f]{8}$/i.test(needle)) {
+      return [];
+    }
+    const rows = await this.prisma.$queryRaw<{ id?: string }[]>(
+      Prisma.sql`SELECT id::text AS id FROM messages WHERE "organizationId" = CAST(${organizationId} AS uuid) AND lower(id::text) LIKE ${`${needle.toLowerCase()}%`} LIMIT 50`,
+    );
+    return rows.flatMap((row) => (typeof row.id === 'string' ? [row.id] : []));
+  }
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function searchClauses(needle: string, prefixIds: readonly string[]): Prisma.MessageWhereInput[] {
+  return [
+    ...(UUID_PATTERN.test(needle) ? [{ id: needle }] : []),
+    ...(prefixIds.length > 0 ? [{ id: { in: [...prefixIds] } }] : []),
+    { to: { contains: needle } },
+    { fromSender: { contains: needle } },
+  ];
 }
 
 function presentRow(

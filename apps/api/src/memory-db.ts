@@ -385,7 +385,22 @@ export function createMemoryDb() {
   }
 
   const db = {
-    $queryRaw: () => Promise.resolve([{ '?column?': 1 }]),
+    $queryRaw: (query: { strings?: readonly string[]; values?: readonly unknown[] }) => {
+      const text = Array.isArray(query.strings) ? query.strings.join(' ') : '';
+      if (!text.includes('id::text')) {
+        return Promise.resolve([{ '?column?': 1 }]);
+      }
+      const organizationId = query.values?.[0];
+      const pattern = query.values?.[1];
+      const prefix = (typeof pattern === 'string' ? pattern : '').replace(/%$/, '').toLowerCase();
+      const ids = [...messages.values()]
+        .filter(
+          (row) => row.organizationId === organizationId && row.id.toLowerCase().startsWith(prefix),
+        )
+        .slice(0, 50)
+        .map((row) => ({ id: row.id }));
+      return Promise.resolve(ids);
+    },
     $disconnect: () => Promise.resolve(),
     $transaction: async (input: ((client: object) => Promise<unknown>) | Promise<unknown>[]) => {
       if (typeof input === 'function') {

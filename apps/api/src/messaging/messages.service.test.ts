@@ -53,6 +53,16 @@ describe('message query', () => {
     const auth = state(organization.id);
     const page = await query.list(auth, { q: '4915', page: 1, pageSize: 25 });
     expect(page.total).toBe(1);
+    const byPhone = await query.list(auth, { q: '+4915123456789', page: 1, pageSize: 25 });
+    expect(byPhone.total).toBe(1);
+    const byId = await query.list(auth, { q: message.id, page: 1, pageSize: 25 });
+    expect(byId.items[0]?.id).toBe(message.id);
+    const byShortId = await query.list(auth, {
+      q: message.id.slice(0, 8),
+      page: 1,
+      pageSize: 25,
+    });
+    expect(byShortId.items[0]?.id).toBe(message.id);
     expect(page.items[0]?.templateName).toBe('Hello');
     const detail = await query.get(auth, message.id);
     expect(detail.body).toBe('Hello');
