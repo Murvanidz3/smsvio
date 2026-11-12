@@ -1,23 +1,30 @@
 'use client';
 
+import { roleAllows } from '@smsvio/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { ConfirmDialog } from '@/components/catalog/confirm';
 import { flag } from '@/components/catalog/table-tools';
-import { useCanCompliance } from '@/components/shell/shell';
 import { useToast } from '@/components/toast';
 import { Button } from '@/components/ui/button';
-import { ApiError } from '@/lib/api';
+import { accountApi, ApiError } from '@/lib/api';
 import { senderApi, type SenderDestination } from '@/lib/senders';
 
 const field = 'border-input bg-background h-9 w-full rounded-lg border px-3 text-sm';
 
 export default function SendersPage() {
-  const canEdit = useCanCompliance();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
+  const role = session.data?.organization?.role;
+  const canEdit = role !== undefined && roleAllows(role, 'compliance');
+  const actionReason = !session.isSuccess
+    ? 'Checking your role.'
+    : session.data.organization === null
+      ? 'Join an organization to change senders.'
+      : 'Only an owner or admin can change senders.';
   const overview = useQuery({ queryKey: ['senders'], queryFn: () => senderApi.overview() });
   const [adding, setAdding] = useState(false);
   const [requesting, setRequesting] = useState(false);
@@ -37,6 +44,16 @@ export default function SendersPage() {
         row.iso2.toLowerCase().includes(needle),
     )
     .slice(0, 8);
+  const emptyReason = overview.isPending
+    ? 'Countries are still loading.'
+    : overview.isError
+      ? 'Countries could not be loaded.'
+      : destinations.length === 0
+        ? 'No countries are in the directory yet. They are loaded when the platform is deployed.'
+        : available.length === 0
+          ? 'Every country is already enabled.'
+          : 'No country matches that search.';
+  const sharedSender = overview.data?.platformSender?.value;
 
   async function addCountry() {
     setBusy(true);
@@ -77,31 +94,37 @@ export default function SendersPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Senders</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Choose the countries you send to and the sender customers see. The shared number is{' '}
-            {overview.data?.platformSender.value ?? '…'}.
+            Choose the countries you send to and the sender customers see.
+            {sharedSender === undefined || sharedSender === ''
+              ? null
+              : ` The shared number is ${sharedSender}.`}
           </p>
         </div>
-        {canEdit ? (
-          <div className="flex gap-2">
+        <div className="flex gap-2">
+          <span title={canEdit ? undefined : actionReason} className="inline-flex">
             <Button
               type="button"
               variant="outline"
+              disabled={!canEdit}
               onClick={() => {
                 setRequesting(true);
               }}
             >
-              Request a sender
+              Request sender ID
             </Button>
+          </span>
+          <span title={canEdit ? undefined : actionReason} className="inline-flex">
             <Button
               type="button"
+              disabled={!canEdit}
               onClick={() => {
                 setAdding(true);
               }}
             >
               Add country
             </Button>
-          </div>
-        ) : null}
+          </span>
+        </div>
       </div>
       <div className="overflow-x-auto rounded-xl border">
         <table className="w-full min-w-[40rem] text-left text-sm">
@@ -195,6 +218,7 @@ export default function SendersPage() {
               country={country}
               countryQuery={countryQuery}
               countryMatches={countryMatches}
+              emptyReason={countryMatches.length === 0 ? emptyReason : null}
               busy={busy}
               onQuery={(value) => {
                 setCountryQuery(value);
@@ -285,8 +309,13 @@ function RequestSender({
         }}
       >
         <h2 id="request-sender-title" className="text-lg font-semibold">
-          Request a sender
+          Request a sender ID
         </h2>
+        {countries.length === 0 ? (
+          <p className="text-muted-foreground mt-3 text-sm">
+            Enable a country before requesting a sender ID.
+          </p>
+        ) : null}
         <label className="mt-4 grid gap-1 text-sm">
           Type
           <select
@@ -362,6 +391,7 @@ function AddCountryDialog({
   country,
   countryQuery,
   countryMatches,
+  emptyReason,
   busy,
   onQuery,
   onPick,
@@ -371,6 +401,7 @@ function AddCountryDialog({
   country: string;
   countryQuery: string;
   countryMatches: SenderDestination[];
+  emptyReason: string | null;
   busy: boolean;
   onQuery: (value: string) => void;
   onPick: (iso2: string, name: string) => void;
@@ -432,22 +463,26 @@ function AddCountryDialog({
         role="listbox"
         aria-label="Matching countries"
       >
-        {countryMatches.map((row) => (
-          <li key={row.iso2}>
-            <button
-              type="button"
-              role="option"
-              aria-selected={country === row.iso2}
-              className="hover:bg-muted w-full rounded-lg px-3 py-2 text-left text-sm"
-              onClick={() => {
-                onPick(row.iso2, row.name);
-              }}
-            >
-              {row.name} +{row.dialCode}
-              {row.price === null ? '' : ` · ${row.price.display} USD`}
-            </button>
-          </li>
-        ))}
+        {countryMatches.length === 0 ? (
+          <li className="text-muted-foreground px-3 py-2 text-sm">{emptyReason}</li>
+        ) : (
+          countryMatches.map((row) => (
+            <li key={row.iso2}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={country === row.iso2}
+                className="hover:bg-muted w-full rounded-lg px-3 py-2 text-left text-sm"
+                onClick={() => {
+                  onPick(row.iso2, row.name);
+                }}
+              >
+                {row.name} +{row.dialCode}
+                {row.price === null ? '' : ` · ${row.price.display} USD`}
+              </button>
+            </li>
+          ))
+        )}
       </ul>
       <p className="text-muted-foreground mt-3 text-sm">
         New countries use the shared platform number until you have an approved sender.

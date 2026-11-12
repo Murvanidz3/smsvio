@@ -11,6 +11,7 @@ import {
 } from './encoding.js';
 import { SMS_ERRORS, smsErrorMessage } from './errors.js';
 import { SMS_FIXTURES } from './fixtures.js';
+import { networkSeedRows } from './networks.js';
 import {
   countrySeedRows,
   isCountryCode,
@@ -227,6 +228,19 @@ describe('phone numbers', () => {
       alphaSenderAllowed: true,
       registrationRequired: false,
     });
+  });
+
+  it('seeds published networks without duplicate codes', () => {
+    const countries = new Set(countrySeedRows().map((row) => row.iso2));
+    const rows = networkSeedRows();
+    const keys = new Set(rows.map((row) => `${row.mcc}${row.mnc}`));
+    expect(rows.length).toBeGreaterThan(40);
+    expect(keys.size).toBe(rows.length);
+    for (const row of rows) {
+      expect(row.mcc).toMatch(/^\d{3}$/);
+      expect(row.mnc).toMatch(/^\d{2,3}$/);
+      expect(countries.has(row.countryIso2)).toBe(true);
+    }
   });
 });
 

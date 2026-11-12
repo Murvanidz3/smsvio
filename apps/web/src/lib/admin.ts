@@ -24,6 +24,7 @@ export interface OrganizationList {
   page: number;
   pageSize: number;
   platformSpendCap: Money;
+  sharedSender: string | null;
   items: AdminOrganization[];
 }
 
@@ -93,6 +94,11 @@ export const adminApi = {
     api<{ message: string }>('/api/internal/admin/settings', {
       method: 'PATCH',
       body: { defaultDailySpendCap },
+    }),
+  setSharedSender: (sharedSender: string) =>
+    api<{ message: string }>('/api/internal/admin/settings', {
+      method: 'PATCH',
+      body: { sharedSender },
     }),
   countries: () =>
     api<{ items: { iso2: string; name: string; dialCode: string }[] }>(

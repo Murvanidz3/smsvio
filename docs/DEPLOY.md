@@ -163,10 +163,13 @@ cd /opt/smsvio
 ./scripts/compose.sh exec -T api node dist/scripts/password-reset-link.js person@example.com
 ```
 
-The migrate container refuses `SEED_ADMIN_PASSWORD=smsvio-demo-local` when `NODE_ENV` is
-production, and it never changes the password of an account that already exists. An empty
-`SEED_ADMIN_PASSWORD` skips password seeding; the verified `SEED_ADMIN_EMAIL` becomes the
-platform admin when that person signs in.
+The migrate container refuses to store `SEED_ADMIN_PASSWORD=smsvio-demo-local` when `NODE_ENV` is
+production, and it never changes the password of an account that already exists. Reference data
+still loads: countries, dial codes, networks, the simulated mock provider, and one route per
+country. An empty `SEED_ADMIN_PASSWORD` skips password seeding. The verified `SEED_ADMIN_EMAIL`
+becomes the platform admin when that person signs in, and an existing user with that email and
+no membership becomes the owner of one organization. The shared sender is filled only while it
+is unset.
 
 ### 1.5 GitHub repository secrets
 

@@ -19,6 +19,7 @@ export default function AdminOrganizationsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [cap, setCap] = useState('');
+  const [senderDraft, setSenderDraft] = useState<string | null>(null);
   const [adjusting, setAdjusting] = useState<AdminOrganization | null>(null);
   const [capping, setCapping] = useState<AdminOrganization | null>(null);
   const [busy, setBusy] = useState(false);
@@ -30,6 +31,22 @@ export default function AdminOrganizationsPage() {
   const rows = list.data?.items ?? [];
   const total = list.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / pageSize));
+  const sender = senderDraft ?? list.data?.sharedSender ?? '';
+
+  async function saveSharedSender() {
+    const next = sender.trim();
+    setBusy(true);
+    try {
+      const result = await adminApi.setSharedSender(next);
+      toast(result.message);
+      setSenderDraft(next);
+      await queryClient.invalidateQueries({ queryKey: ['admin-organizations'] });
+    } catch (error) {
+      toast(error instanceof ApiError ? error.message : 'Could not save the shared sender.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function savePlatformCap() {
     setBusy(true);
@@ -90,6 +107,32 @@ export default function AdminOrganizationsPage() {
         <Button type="submit" disabled={busy}>
           Save platform cap
         </Button>
+      </form>
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void saveSharedSender();
+        }}
+      >
+        <label className="grid gap-1 text-sm">
+          Shared sender
+          <input
+            className={field}
+            inputMode="numeric"
+            value={sender}
+            placeholder="12025550199"
+            onChange={(event) => {
+              setSenderDraft(event.target.value);
+            }}
+          />
+        </label>
+        <Button type="submit" disabled={busy}>
+          Save shared sender
+        </Button>
+        <p className="text-muted-foreground basis-full text-sm">
+          Digits only. This is the number on the Senders page. Leave it blank to hide that sentence.
+        </p>
       </form>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="grid gap-1 text-sm">

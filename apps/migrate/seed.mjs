@@ -22,23 +22,31 @@ if (migrated.status !== 0) {
 }
 
 const { ARGON2ID_OPTIONS, LOCAL_DEMO_PASSWORD } = await import('@smsvio/shared');
-const { countrySeedRows } = await import('@smsvio/shared/phone');
+const { countrySeedRows, networkSeedRows } = await import('@smsvio/shared/phone');
 const { createPrismaClient } = await import('@smsvio/db');
 const argon2 = (await import('argon2')).default;
 const prisma = createPrismaClient({ connectionString: process.env.DATABASE_URL ?? '' });
 
 try {
   await prisma.country.createMany({ data: countrySeedRows(), skipDuplicates: true });
+  await prisma.network.createMany({ data: networkSeedRows(), skipDuplicates: true });
 
   const billing = await import('@smsvio/shared/billing');
-  await prisma.platformSetting.upsert({
+  const setting = await prisma.platformSetting.upsert({
     where: { id: billing.PLATFORM_SETTING_ID },
     create: {
       id: billing.PLATFORM_SETTING_ID,
       defaultDailySpendCapMicros: billing.DEFAULT_DAILY_SPEND_CAP_MICROS,
+      sharedSender: billing.PLATFORM_SENDER_VALUE,
     },
     update: {},
   });
+  if (setting.sharedSender === null) {
+    await prisma.platformSetting.update({
+      where: { id: billing.PLATFORM_SETTING_ID },
+      data: { sharedSender: billing.PLATFORM_SENDER_VALUE },
+    });
+  }
   const provider = await prisma.provider.upsert({
     where: { code: billing.MOCK_PROVIDER_CODE },
     create: {
@@ -73,12 +81,13 @@ try {
   const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SEED_ADMIN_PASSWORD ?? '';
   const skipAdmin = email === undefined || email === '' || password === '';
-  if (!skipAdmin && process.env.NODE_ENV === 'production' && password === LOCAL_DEMO_PASSWORD) {
+  const refuseDemoPassword =
+    !skipAdmin && process.env.NODE_ENV === 'production' && password === LOCAL_DEMO_PASSWORD;
+  const shortPassword = !skipAdmin && !refuseDemoPassword && password.length < 10;
+  if (refuseDemoPassword) {
     console.error('Refusing to seed the local demo password in production.');
-    process.exitCode = 1;
-  } else if (!skipAdmin && password.length < 10) {
+  } else if (shortPassword) {
     console.error('SEED_ADMIN_PASSWORD must be at least 10 characters.');
-    process.exitCode = 1;
   } else if (!skipAdmin) {
     const passwordHash = await argon2.hash(password, {
       type: argon2.argon2id,
@@ -115,6 +124,21 @@ try {
       await prisma.membership.create({
         data: { userId: user.id, organizationId: organization.id, role: 'OWNER' },
       });
+    }
+  }
+
+  if (email !== undefined && email !== '') {
+    const operator = await prisma.user.findUnique({ where: { email } });
+    if (operator !== null) {
+      const memberships = await prisma.membership.count({ where: { userId: operator.id } });
+      if (memberships === 0) {
+        const organization = await prisma.organization.create({
+          data: { name: process.env.SEED_ORG_NAME?.trim() || 'SMSVIO', timezone: 'UTC' },
+        });
+        await prisma.membership.create({
+          data: { userId: operator.id, organizationId: organization.id, role: 'OWNER' },
+        });
+      }
     }
   }
 } finally {

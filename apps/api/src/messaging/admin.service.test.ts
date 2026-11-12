@@ -329,7 +329,14 @@ describe('admin pricing services', () => {
     await organizations.setSpendCap(state, organization.id, '0', client);
     await expect(organizations.settings(state)).resolves.toMatchObject({
       defaultDailySpendCap: { display: '20.00' },
+      sharedSender: null,
     });
+    await organizations.setPlatformSettings(state, { sharedSender: '12025550199' }, client);
+    await expect(senders.overview(state)).resolves.toMatchObject({
+      platformSender: { value: '12025550199', label: 'SMSVIO shared number' },
+    });
+    await organizations.setPlatformSettings(state, { sharedSender: '' }, client);
+    await expect(senders.overview(state)).resolves.toMatchObject({ platformSender: null });
     await organizations.setPlatformCap(state, '0', client);
     const directory = await organizations.countries(state);
     expect(directory.items.map((item) => item.iso2)).toEqual(['DE', 'US']);

@@ -103,6 +103,21 @@ export const platformSpendCapSchema = z.object({
   defaultDailySpendCap: z.string().trim().min(1).max(20),
 });
 
+export const platformSettingsSchema = z
+  .object({
+    defaultDailySpendCap: z.string().trim().min(1).max(20).optional(),
+    sharedSender: z
+      .string()
+      .trim()
+      .refine((value) => value === '' || /^\d{8,15}$/.test(value), {
+        message: 'Enter the shared sender as 8 to 15 digits, or leave it blank.',
+      })
+      .optional(),
+  })
+  .refine((value) => value.defaultDailySpendCap !== undefined || value.sharedSender !== undefined, {
+    message: 'Send a spend cap or a shared sender.',
+  });
+
 export const addCountrySchema = z.object({
   countryIso2: z.string().regex(/^[A-Z]{2}$/),
   senderId: z.uuid().nullable(),

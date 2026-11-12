@@ -26,6 +26,7 @@ export default function ProvidersPage() {
         <h1 className="text-2xl font-bold tracking-tight">Providers</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           Each provider has its own markup. Credentials stay encrypted and are never shown again.
+          The mock provider is simulated and does not send messages. It stays until Phase 7.
         </p>
       </div>
       {secret === null ? null : (
@@ -136,7 +137,9 @@ export default function ProvidersPage() {
               providers.data?.items.map((provider) => (
                 <tr key={provider.id} className="border-t">
                   <td className="px-3 py-2">{provider.code}</td>
-                  <td className="px-3 py-2">{provider.type}</td>
+                  <td className="px-3 py-2">
+                    {provider.type === 'MOCK' ? 'Simulated' : provider.type}
+                  </td>
                   <td className="px-3 py-2">{provider.status}</td>
                   <td className="px-3 py-2">{provider.markupPercent}%</td>
                   <td className="px-3 py-2">{provider.maxTps}/s</td>

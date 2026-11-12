@@ -76,9 +76,10 @@ startup and exit with a list of the invalid keys. `PUBLIC_ORIGIN` in that file i
 match `http://localhost:8080`.
 
 `pnpm --filter @smsvio/db migrate:deploy` applies migrations only. `node apps/migrate/seed.mjs`
-applies migrations, seeds countries, and then creates the demo account when `SEED_ADMIN_EMAIL`
-and `SEED_ADMIN_PASSWORD` are set. It does not change the password of an account that already
-exists, and it does not overwrite a country row that is already stored.
+applies migrations, then seeds countries, dial codes, networks, the simulated mock provider, and
+the shared sender. It creates the demo account when `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`
+are set. It does not change the password of an account that already exists, and it does not
+overwrite a country, network, provider markup, or shared sender that is already stored.
 `AUTO_APPROVE_TEMPLATES=true` in `.env.example` approves a template when it is submitted. Leave
 it false to keep the template pending for an operator.
 

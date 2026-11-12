@@ -5,6 +5,7 @@ import {
   DEFAULT_DAILY_SPEND_CAP_MICROS,
   effectiveDailySpendCap,
   effectiveMarkup,
+  configuredSharedSender,
   formatMicros,
   marginMicros,
   parseUsdToMicros,
@@ -12,9 +13,23 @@ import {
 } from './money.js';
 import { currentFixedPrice, resolveCustomerPrice, selectPrimaryRoute } from './pricing.js';
 import { parseRateCsv } from './rates-csv.js';
-import { adminListSchema, createProviderSchema, requestSenderSchema } from './schemas.js';
+import {
+  adminListSchema,
+  createProviderSchema,
+  platformSettingsSchema,
+  requestSenderSchema,
+} from './schemas.js';
 
 describe('customer price', () => {
+  it('hides a blank shared sender and checks the settings body', () => {
+    expect(configuredSharedSender(null)).toBeNull();
+    expect(configuredSharedSender('  ')).toBeNull();
+    expect(configuredSharedSender('12025550199')).toBe('12025550199');
+    expect(platformSettingsSchema.parse({ sharedSender: '' })).toEqual({ sharedSender: '' });
+    expect(platformSettingsSchema.safeParse({}).success).toBe(false);
+    expect(platformSettingsSchema.safeParse({ sharedSender: '123' }).success).toBe(false);
+  });
+
   it('marks up the route cost and rounds up to 100 micros', () => {
     expect(quoteFromCost(10_000n, 50)).toBe(15_000n);
     expect(quoteFromCost(10_000n, 0)).toBe(10_000n);

@@ -325,8 +325,14 @@ to `main` and must pass there. The deploy job does not start unless all three su
   and HTTP health checks return not-ok and do not open a connection.
 - The seed creates provider `mock` at 50% markup and one country-wide route per country at priority
   100, weight 1, and 10,000 micros, without overwriting an existing provider markup or route. The
-  resulting list price is 15,000 micros (0.0150 USD). The platform shared sender is the fictional
-  number 12025550199. Networks are not seeded. `Route.mccmnc` is not a foreign key.
+  resulting list price is 15,000 micros (0.0150 USD). The admin console labels that provider
+  Simulated until Phase 7. The platform shared sender is a `platform_settings` value. The seed
+  fills it with the fictional number 12025550199 only while the column is null, and leaves an
+  empty value an operator saved. The same deploy inserts countries, dial codes, and a published
+  set of mobile networks, skipping rows that already exist. `Route.mccmnc` is not a foreign key.
+  A seed-admin user who already exists and has no membership receives one organization and the
+  OWNER role. A refused demo password does not fail the migrate container after that reference
+  data is written.
 - Sender requests stay `PENDING`. The approval queue is Phase 6. Enabling a country is idempotent
   and uses the shared sender until then. `registrationComplete` is false when the country requires
   registration; completing it is Phase 6. Real phone verification stays deferred.

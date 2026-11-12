@@ -1042,7 +1042,11 @@ function createMessagingMemory() {
   interface SettingRow extends Timed {
     id: string;
     defaultDailySpendCapMicros: bigint;
+    sharedSender: string | null;
   }
+  type SettingInput = Omit<SettingRow, 'createdAt' | 'updatedAt' | 'sharedSender'> & {
+    sharedSender?: string | null;
+  };
 
   const providers = new Map<string, ProviderRow>();
   const routes = new Map<string, RouteRow>();
@@ -1335,14 +1339,28 @@ function createMessagingMemory() {
       platformSetting: {
         findUnique: ({ where }: { where: { id: string } }) =>
           Promise.resolve(settings.get(where.id) ?? null),
-        create: ({ data }: { data: Omit<SettingRow, 'createdAt' | 'updatedAt'> }) => {
+        create: ({ data }: { data: SettingInput }) => {
           if (settings.has(data.id)) {
             uniqueConflict();
           }
           const now = new Date();
-          const row: SettingRow = { createdAt: now, updatedAt: now, ...data };
+          const row: SettingRow = {
+            createdAt: now,
+            updatedAt: now,
+            id: data.id,
+            defaultDailySpendCapMicros: data.defaultDailySpendCapMicros,
+            sharedSender: data.sharedSender ?? null,
+          };
           settings.set(row.id, row);
           return Promise.resolve(row);
+        },
+        update: ({ where, data }: { where: { id: string }; data: Partial<SettingRow> }) => {
+          const existing = settings.get(where.id);
+          if (existing === undefined) {
+            throw new Error(`missing platform setting ${where.id}`);
+          }
+          Object.assign(existing, data, { updatedAt: new Date() });
+          return Promise.resolve(existing);
         },
         upsert: ({
           where,
@@ -1350,7 +1368,7 @@ function createMessagingMemory() {
           update,
         }: {
           where: { id: string };
-          create: Omit<SettingRow, 'createdAt' | 'updatedAt'>;
+          create: SettingInput;
           update: Partial<SettingRow>;
         }) => {
           const existing = settings.get(where.id);
@@ -1359,7 +1377,13 @@ function createMessagingMemory() {
             return Promise.resolve(existing);
           }
           const now = new Date();
-          const row: SettingRow = { createdAt: now, updatedAt: now, ...create };
+          const row: SettingRow = {
+            createdAt: now,
+            updatedAt: now,
+            id: create.id,
+            defaultDailySpendCapMicros: create.defaultDailySpendCapMicros,
+            sharedSender: create.sharedSender ?? null,
+          };
           settings.set(row.id, row);
           return Promise.resolve(row);
         },

@@ -1,7 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { PrismaClient } from '@smsvio/db';
 import { smsErrorMessage, checkSender } from '@smsvio/shared';
-import { PLATFORM_SENDER_LABEL, PLATFORM_SENDER_VALUE } from '@smsvio/shared/billing';
+import {
+  PLATFORM_SENDER_LABEL,
+  PLATFORM_SETTING_ID,
+  configuredSharedSender,
+} from '@smsvio/shared/billing';
 import { PRISMA } from '@smsvio/server';
 
 import type { AuthState } from '../accounts/support.js';
@@ -21,14 +25,16 @@ export class SenderService {
   async overview(state: AuthState) {
     assertCapability(state, 'view');
     const organizationId = state.organizationId;
-    const [countries, enabled, senderIds] = await Promise.all([
+    const [countries, enabled, senderIds, setting] = await Promise.all([
       this.prisma.country.findMany({ where: { enabled: true }, orderBy: { name: 'asc' } }),
       this.prisma.orgCountry.findMany({ where: { organizationId } }),
       this.prisma.senderId.findMany({
         where: { organizationId },
         orderBy: { createdAt: 'desc' },
       }),
+      this.prisma.platformSetting.findUnique({ where: { id: PLATFORM_SETTING_ID } }),
     ]);
+    const shared = configuredSharedSender(setting?.sharedSender);
     const enabledByCountry = new Map(enabled.map((row) => [row.countryIso2, row]));
     const senderById = new Map(senderIds.map((row) => [row.id, row]));
     const prices = await this.pricing.quoteMap(organizationId);
@@ -40,7 +46,9 @@ export class SenderService {
         row === null
           ? null
           : row.senderIdId === null
-            ? { id: null, value: PLATFORM_SENDER_VALUE, label: PLATFORM_SENDER_LABEL }
+            ? shared === null
+              ? null
+              : { id: null, value: shared, label: PLATFORM_SENDER_LABEL }
             : {
                 id: row.senderIdId,
                 value: senderById.get(row.senderIdId)?.value ?? '',
@@ -61,7 +69,7 @@ export class SenderService {
       });
     }
     return {
-      platformSender: { value: PLATFORM_SENDER_VALUE, label: PLATFORM_SENDER_LABEL },
+      platformSender: shared === null ? null : { value: shared, label: PLATFORM_SENDER_LABEL },
       destinations,
       senderIds: senderIds.map((sender) => ({
         id: sender.id,

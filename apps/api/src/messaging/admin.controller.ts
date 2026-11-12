@@ -20,7 +20,7 @@ import {
   createRouteSchema,
   orgRateSchema,
   organizationStatusSchema,
-  platformSpendCapSchema,
+  platformSettingsSchema,
   rateImportSchema,
   spendCapSchema,
   updateProviderSchema,
@@ -95,9 +95,9 @@ export class AdminController {
 
   @Patch('settings')
   setSettings(@Req() request: FastifyRequest, @Body() body: unknown) {
-    return this.organizations.setPlatformCap(
+    return this.organizations.setPlatformSettings(
       current(request),
-      parseInput(platformSpendCapSchema, body).defaultDailySpendCap,
+      parseInput(platformSettingsSchema, body),
       clientInfo(request),
     );
   }

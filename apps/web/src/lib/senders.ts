@@ -31,7 +31,7 @@ export interface SenderRequest {
 }
 
 export interface SenderOverview {
-  platformSender: { value: string; label: string };
+  platformSender: { value: string; label: string } | null;
   destinations: SenderDestination[];
   senderIds: SenderRequest[];
 }

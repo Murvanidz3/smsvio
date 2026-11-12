@@ -3,6 +3,7 @@ import type { PrismaClient } from '@smsvio/db';
 import {
   DEFAULT_DAILY_SPEND_CAP_MICROS,
   PLATFORM_SETTING_ID,
+  configuredSharedSender,
   effectiveDailySpendCap,
 } from '@smsvio/shared/billing';
 import { PRISMA } from '@smsvio/server';
@@ -31,7 +32,8 @@ export class OrganizationAdminService {
               { legalName: { contains: query.q, mode: 'insensitive' as const } },
             ],
           };
-    const cap = await this.platformCap();
+    const setting = await this.platformRow();
+    const cap = setting.defaultDailySpendCapMicros;
     const [total, rows] = await Promise.all([
       this.prisma.organization.count({ where }),
       this.prisma.organization.findMany({
@@ -50,6 +52,7 @@ export class OrganizationAdminService {
       page: query.page,
       pageSize: query.pageSize,
       platformSpendCap: presentMoney(cap, 2),
+      sharedSender: configuredSharedSender(setting.sharedSender),
       items: rows.map((organization) => {
         const balance = balanceByOrg.get(organization.id);
         const inherited = organization.dailySpendCapMicros === null;
@@ -144,27 +147,58 @@ export class OrganizationAdminService {
 
   async settings(state: AuthState) {
     assertPlatformAdmin(state);
-    const cap = await this.platformCap();
-    return { defaultDailySpendCap: presentMoney(cap, 2) };
+    const setting = await this.platformRow();
+    return {
+      defaultDailySpendCap: presentMoney(setting.defaultDailySpendCapMicros, 2),
+      sharedSender: configuredSharedSender(setting.sharedSender),
+    };
   }
 
   async setPlatformCap(state: AuthState, amount: string, client: ClientInfo) {
+    return this.setPlatformSettings(state, { defaultDailySpendCap: amount }, client);
+  }
+
+  async setPlatformSettings(
+    state: AuthState,
+    input: { defaultDailySpendCap?: string; sharedSender?: string },
+    client: ClientInfo,
+  ) {
     assertPlatformAdmin(state);
-    const cap = requireUsd(amount, 'defaultDailySpendCap', true);
-    await this.prisma.platformSetting.upsert({
+    const data: { defaultDailySpendCapMicros?: bigint; sharedSender?: string } = {};
+    if (input.defaultDailySpendCap !== undefined) {
+      data.defaultDailySpendCapMicros = requireUsd(
+        input.defaultDailySpendCap,
+        'defaultDailySpendCap',
+        true,
+      );
+    }
+    if (input.sharedSender !== undefined) {
+      data.sharedSender = input.sharedSender;
+    }
+    await this.platformRow();
+    await this.prisma.platformSetting.update({
       where: { id: PLATFORM_SETTING_ID },
-      create: { id: PLATFORM_SETTING_ID, defaultDailySpendCapMicros: cap },
-      update: { defaultDailySpendCapMicros: cap },
+      data,
     });
     await writeAudit(this.prisma, {
       organizationId: null,
       actorUserId: state.userId,
-      action: 'platform.spend_cap',
+      action: input.sharedSender !== undefined ? 'platform.shared_sender' : 'platform.spend_cap',
       targetType: 'platform_setting',
       targetId: PLATFORM_SETTING_ID,
-      meta: { defaultDailySpendCapMicros: cap.toString() },
+      meta: {
+        ...(data.defaultDailySpendCapMicros === undefined
+          ? {}
+          : { defaultDailySpendCapMicros: data.defaultDailySpendCapMicros.toString() }),
+        ...(input.sharedSender === undefined ? {} : { sharedSenderSet: input.sharedSender !== '' }),
+      },
       ip: client.ip,
     });
+    if (input.sharedSender !== undefined && input.defaultDailySpendCap === undefined) {
+      return {
+        message: input.sharedSender === '' ? 'Shared sender hidden.' : 'Shared sender saved.',
+      };
+    }
     return { message: 'Default daily spend cap saved.' };
   }
 
@@ -183,21 +217,21 @@ export class OrganizationAdminService {
     };
   }
 
-  private async platformCap(): Promise<bigint> {
+  private async platformRow() {
     const existing = await this.prisma.platformSetting.findUnique({
       where: { id: PLATFORM_SETTING_ID },
     });
     if (existing !== null) {
-      return existing.defaultDailySpendCapMicros;
+      return existing;
     }
     try {
-      const created = await this.prisma.platformSetting.create({
+      return await this.prisma.platformSetting.create({
         data: {
           id: PLATFORM_SETTING_ID,
           defaultDailySpendCapMicros: DEFAULT_DAILY_SPEND_CAP_MICROS,
+          sharedSender: null,
         },
       });
-      return created.defaultDailySpendCapMicros;
     } catch (error) {
       if (!isUniqueViolation(error)) {
         throw error;
@@ -205,7 +239,10 @@ export class OrganizationAdminService {
       const again = await this.prisma.platformSetting.findUnique({
         where: { id: PLATFORM_SETTING_ID },
       });
-      return again?.defaultDailySpendCapMicros ?? DEFAULT_DAILY_SPEND_CAP_MICROS;
+      if (again === null) {
+        throw error;
+      }
+      return again;
     }
   }
 }

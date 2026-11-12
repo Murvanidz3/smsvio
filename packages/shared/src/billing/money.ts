@@ -24,6 +24,12 @@ export const MOCK_SEED_PRIORITY = 100;
 export const PLATFORM_SENDER_VALUE = '12025550199';
 export const PLATFORM_SENDER_LABEL = 'SMSVIO shared number';
 
+/** Blank means the Senders page omits the shared-number sentence. */
+export function configuredSharedSender(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? '';
+  return trimmed === '' ? null : trimmed;
+}
+
 export function effectiveDailySpendCap(
   organizationCap: bigint | null,
   platformCap: bigint,
