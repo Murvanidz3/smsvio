@@ -51,8 +51,8 @@ test('sends an approved template and shows it as delivered', async ({ page }, te
   await expect(page).toHaveURL('/dashboard');
   await openDashboardLink(page, 'Templates');
   await page.getByRole('link', { name: 'From scratch' }).first().click();
-  await page.getByLabel('Name').fill(templateName);
-  await page.getByLabel('Message').fill('Hello from SMSVIO');
+  await page.getByLabel('Name', { exact: true }).fill(templateName);
+  await page.getByLabel('Message', { exact: true }).fill('Hello from SMSVIO');
   await page.getByRole('button', { name: 'Save draft' }).click();
   await expect(page).toHaveURL(/\/dashboard\/templates\/[0-9a-f-]+$/);
   await page.getByRole('button', { name: 'Submit for review' }).click();
