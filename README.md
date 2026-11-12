@@ -4,22 +4,21 @@ SMSVIO is a business SMS platform: one dashboard and one API for sending message
 repository holds the whole product — web app, API, background worker, database schema and the
 infrastructure that runs it at [smsvio.com](https://smsvio.com).
 
-The build follows the phases in [`docs/SPEC.md`](docs/SPEC.md). **Phase 3 part A (providers,
-routes, rates, senders, and balances)** is in place. Operators set a markup on each provider,
-see the resulting customer price, import manual rates, and credit a balance. Customers enable
-countries and request a sender. The send pipeline, the Send screen, and the Messages screen are
-part B and are not built yet. Part A is the live release `86d0846`; the record is
-[`docs/reports/phase-3a.md`](docs/reports/phase-3a.md). Phase 2 (contacts, templates, and number
-lookup), Phase 1
-(accounts), and Phase 0 (foundation and production hosting) remain underneath it.
+The build follows the phases in [`docs/SPEC.md`](docs/SPEC.md). **Phase 3 part B (the send
+pipeline, Send, and Messages)** is in place on top of part A (providers, routes, rates, senders,
+and balances). An accepted message is reserved, handed to the worker, and charged once when the
+simulated provider accepts it. Part A is still the live release until this part is deployed. The
+part A record is [`docs/reports/phase-3a.md`](docs/reports/phase-3a.md). Phase 2 (contacts,
+templates, and number lookup), Phase 1 (accounts), and Phase 0 (foundation and production hosting)
+remain underneath it.
 
 ## Repository layout
 
 ```
 apps/
-  web/        Next.js 16 app: landing page, accounts, contacts, templates, senders, admin, lookup
+  web/        Next.js 16 app: landing page, accounts, contacts, templates, senders, send, messages, admin, lookup
   api/        NestJS + Fastify REST API (/api/*, /healthz, /readyz)
-  worker/     NestJS worker: heartbeat and a nightly ledger check (queues arrive with sending)
+  worker/     NestJS worker: send queue, delivery receipts, heartbeat, and a nightly ledger check
   migrate/    One-shot container: Prisma migrations, then the demo seed
 packages/
   config/     Shared ESLint, Prettier and TypeScript presets

@@ -12,6 +12,7 @@ import {
 import { SMS_ERRORS, smsErrorMessage } from './errors.js';
 import { SMS_FIXTURES } from './fixtures.js';
 import { networkSeedRows } from './networks.js';
+import { retryDelayMs, sendLockKey, spendAllowed, transitionMessage } from './pipeline.js';
 import {
   countrySeedRows,
   isCountryCode,
@@ -236,6 +237,21 @@ describe('phone numbers', () => {
     const keys = new Set(rows.map((row) => `${row.mcc}${row.mnc}`));
     expect(rows.length).toBeGreaterThan(40);
     expect(keys.size).toBe(rows.length);
+    expect(transitionMessage('QUEUED', 'SENDING')).toBe('SENDING');
+    expect(transitionMessage('SENT', 'SENT')).toBeNull();
+    expect(transitionMessage('DELIVERED', 'FAILED')).toBeNull();
+    expect(transitionMessage('EXPIRED', 'DELIVERED')).toBe('DELIVERED');
+    expect(retryDelayMs(1, 0)).toBe(1000);
+    expect(retryDelayMs(0, 0.5)).toBe(1125);
+    expect(retryDelayMs(3, 0)).toBe(4000);
+    expect(spendAllowed(10n, 5n, 15n)).toBe(true);
+    expect(spendAllowed(10n, 6n, 15n)).toBe(false);
+    expect(spendAllowed(10n, 5n, 15n)).toBe(true);
+    expect(sendLockKey('abc')).toBe('smsvio:lock:send:abc');
+    expect(transitionMessage('QUEUED', 'FAILED')).toBe('FAILED');
+    expect(transitionMessage('SENDING', 'SENT')).toBe('SENT');
+    expect(transitionMessage('SENT', 'UNDELIVERED')).toBe('UNDELIVERED');
+    expect(transitionMessage('SENT', 'EXPIRED')).toBe('EXPIRED');
     for (const row of rows) {
       expect(row.mcc).toMatch(/^\d{3}$/);
       expect(row.mnc).toMatch(/^\d{2,3}$/);

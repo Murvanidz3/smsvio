@@ -19,6 +19,13 @@ function fakeRedis() {
     set: vi.fn(() => Promise.resolve('OK')),
     del: vi.fn(() => Promise.resolve(1)),
     quit: vi.fn(() => Promise.resolve('OK')),
+    lpush: vi.fn(() => Promise.resolve(0)),
+    rpop: vi.fn(() => Promise.resolve(null)),
+    zadd: vi.fn(() => Promise.resolve(0)),
+    zrangebyscore: vi.fn(() => Promise.resolve([])),
+    zrem: vi.fn(() => Promise.resolve(0)),
+    incr: vi.fn(() => Promise.resolve(1)),
+    expire: vi.fn(() => Promise.resolve(1)),
   };
 }
 
@@ -74,6 +81,7 @@ describe('HeartbeatService in the worker module', () => {
       .useValue({
         orgBalance: { findMany: () => Promise.resolve([]) },
         ledgerEntry: { findMany: () => Promise.resolve([]) },
+        message: { findMany: () => Promise.resolve([]) },
         $disconnect: () => Promise.resolve(),
       })
       .compile();

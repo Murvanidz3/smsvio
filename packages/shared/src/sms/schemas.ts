@@ -56,6 +56,50 @@ export const lookupSchema = z.object({
   country: countryCodeSchema.optional(),
 });
 
+export const sendMessageSchema = z
+  .object({
+    templateId: z.uuid(),
+    variables: z.record(z.string().regex(/^[a-z0-9_]+$/), z.string().max(200)).optional(),
+    to: z.string().trim().min(1).max(32).optional(),
+    country: countryCodeSchema.optional(),
+    contactId: z.uuid().optional(),
+    senderId: z.uuid().nullable().optional(),
+    clientRef: z.string().trim().min(1).max(80).optional(),
+  })
+  .refine((value) => value.to !== undefined || value.contactId !== undefined, {
+    message: 'Enter a phone number or choose a contact.',
+  });
+
+export const messageListSchema = z.object({
+  q: z.string().trim().max(80).optional(),
+  status: z
+    .enum([
+      'QUEUED',
+      'SENDING',
+      'SENT',
+      'DELIVERED',
+      'UNDELIVERED',
+      'EXPIRED',
+      'FAILED',
+      'REJECTED',
+    ])
+    .optional(),
+  direction: z.enum(['OUTBOUND', 'INBOUND']).optional(),
+  country: countryCodeSchema.optional(),
+  templateId: z.uuid().optional(),
+  apiKeyId: z.uuid().optional(),
+  from: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date.')
+    .optional(),
+  to: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date.')
+    .optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: pageSizeSchema.default(10),
+});
+
 export const analyticsQuerySchema = z.object({
   days: z.coerce
     .number()

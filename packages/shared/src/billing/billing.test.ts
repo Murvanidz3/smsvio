@@ -11,7 +11,12 @@ import {
   parseUsdToMicros,
   quoteFromCost,
 } from './money.js';
-import { currentFixedPrice, resolveCustomerPrice, selectPrimaryRoute } from './pricing.js';
+import {
+  currentFixedPrice,
+  orderedRoutes,
+  resolveCustomerPrice,
+  selectPrimaryRoute,
+} from './pricing.js';
 import { parseRateCsv } from './rates-csv.js';
 import {
   adminListSchema,
@@ -71,6 +76,13 @@ describe('customer price', () => {
     expect(selectPrimaryRoute(routes, 'US', '999999')?.id).toBe('a');
     expect(selectPrimaryRoute(routes, 'FR', null)).toBeNull();
     expect(selectPrimaryRoute([], 'US', null)).toBeNull();
+    expect(orderedRoutes(routes, 'US', '310260').map((route) => route.id)).toEqual([
+      'c',
+      'a',
+      'b',
+      'f',
+    ]);
+    expect(orderedRoutes(routes, 'US', null).map((route) => route.id)).toEqual(['a', 'b', 'f']);
   });
 
   it('breaks a full tie by id', () => {

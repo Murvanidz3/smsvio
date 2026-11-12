@@ -26,14 +26,16 @@ function readSidebarCollapsed(): boolean {
 const NAV = [
   { href: '/dashboard', label: 'Overview', group: 'Main' },
   { href: '/dashboard/templates', label: 'Templates', group: 'Main' },
+  { href: '/dashboard/send', label: 'Send', group: 'Main' },
   { href: '/dashboard/contacts', label: 'Contacts', group: 'Main' },
+  { href: '/dashboard/messages', label: 'Messages', group: 'Development' },
   { href: '/dashboard/senders', label: 'Senders', group: 'Main' },
   { href: '/dashboard/users', label: 'Users', group: 'Account' },
   { href: '/dashboard/settings', label: 'Settings', group: 'Account' },
   { href: '/dashboard/tools/number-lookup', label: 'Number lookup', group: 'Tools' },
 ] as const;
 
-const GROUPS = ['Main', 'Account', 'Tools'] as const;
+const GROUPS = ['Main', 'Development', 'Account', 'Tools'] as const;
 
 function isCurrent(pathname: string, href: string): boolean {
   if (href === '/dashboard') {

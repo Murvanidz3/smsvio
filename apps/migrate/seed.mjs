@@ -23,6 +23,7 @@ if (migrated.status !== 0) {
 
 const { ARGON2ID_OPTIONS, LOCAL_DEMO_PASSWORD } = await import('@smsvio/shared');
 const { countrySeedRows, networkSeedRows } = await import('@smsvio/shared/phone');
+const { MOCK_CALLBACK_SECRET, hashProviderSecret } = await import('@smsvio/shared/provider');
 const { createPrismaClient } = await import('@smsvio/db');
 const argon2 = (await import('argon2')).default;
 const prisma = createPrismaClient({ connectionString: process.env.DATABASE_URL ?? '' });
@@ -58,6 +59,12 @@ try {
     },
     update: {},
   });
+  if (provider.callbackSecretHash === null) {
+    await prisma.provider.update({
+      where: { id: provider.id },
+      data: { callbackSecretHash: hashProviderSecret(MOCK_CALLBACK_SECRET) },
+    });
+  }
   const countries = await prisma.country.findMany({ select: { iso2: true } });
   for (const country of countries) {
     const existing = await prisma.route.findFirst({

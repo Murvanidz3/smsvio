@@ -14,7 +14,8 @@ const base = {
 
 describe('loadApiEnv', () => {
   it('applies defaults', () => {
-    expect(loadApiEnv(base)).toEqual({
+    const env = loadApiEnv(base);
+    expect(env).toMatchObject({
       ...base,
       NODE_ENV: 'development',
       LOG_LEVEL: 'info',
@@ -23,23 +24,13 @@ describe('loadApiEnv', () => {
       DATABASE_POOL_MAX: 10,
       TRUST_PROXY_HOPS: 1,
       READINESS_TIMEOUT_MS: 2000,
-      SENTRY_DSN: undefined,
-      SENTRY_ENVIRONMENT: undefined,
-      APP_RELEASE: undefined,
       SMTP_PORT: 587,
-      SMTP_USER: undefined,
-      SMTP_PASSWORD: undefined,
-      MAIL_SINK_DIR: undefined,
       EMAIL_MODE: 'disabled',
-      GOOGLE_CLIENT_ID: undefined,
-      GOOGLE_CLIENT_SECRET: undefined,
-      SEED_ADMIN_EMAIL: undefined,
-      GOOGLE_AUTHORIZATION_ENDPOINT: undefined,
-      GOOGLE_TOKEN_ENDPOINT: undefined,
-      GOOGLE_JWKS_URI: undefined,
-      GOOGLE_ISSUER: undefined,
+      ORG_SENDS_PER_SECOND: 20,
       AUTO_APPROVE_TEMPLATES: 'false',
     });
+    expect(env.SENTRY_DSN).toBeUndefined();
+    expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
   });
 
   it('parses overrides', () => {

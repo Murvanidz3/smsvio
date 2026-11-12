@@ -39,7 +39,7 @@
       ]
     },
     "test:e2e": {
-      "dependsOn": ["build", "@smsvio/api#build"],
+      "dependsOn": ["build", "@smsvio/api#build", "@smsvio/worker#build"],
       "cache": false,
       "passThroughEnv": [
         "PLAYWRIGHT_*",

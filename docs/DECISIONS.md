@@ -339,6 +339,35 @@ to `main` and must pass there. The deploy job does not start unless all three su
 - `Message.providerId` and `Message.routeId` now reference Provider and Route and are set null if
   that row is removed. `apiKeyId` still has no foreign key.
 - Part A is in production at `86d0846` ([CI run 43114439327](https://github.com/Murvanidz3/smsvio/actions/runs/43114439327)).
-  `https://smsvio.com/readyz` returned ok after that deploy. Part B has not started.
+  `https://smsvio.com/readyz` returned ok after that deploy.
   `AUTO_APPROVE_TEMPLATES` was not changed. A trial concurrency group of one run per commit was
   reverted, so pushes to a branch still share one CI group.
+
+## Phase 3b — Send pipeline (2026-11-12)
+
+- The send pipeline uses Redis lists and sorted sets (`smsvio:q:sms.send`, `smsvio:q:sms.send:delay`,
+  `smsvio:q:sms.dlr`). BullMQ is not a dependency. The API accepts a message and pushes its id.
+  The worker sends. A 30 second lock plus a status claim keeps a duplicate queue entry from sending
+  twice.
+- Accept order follows the spec: role, organization status, idempotency key, phone, enabled country,
+  registration, sender, opt-out, approved template, length, quote, 20 sends per second, daily spend
+  cap, then one hold and a `QUEUED` row. The customer is charged the quoted price. `costMicros` is
+  the route that accepted the message. A failed send releases the hold.
+- Until real carriers exist, dispatch uses only `MOCK` providers whose status is `ACTIVE`.
+  Opt-out is `Contact.optedOut`. The OptOut table and auto-replies stay in Phase 6. Every transition
+  writes a `MessageEvent`. Webhook delivery stays in Phase 4. Delivery receipts arrive at
+  `POST /api/hooks/providers/mock` and are queued on `sms.dlr`. A repeated receipt is the same
+  sorted-set member, and a late `delivered` after `expired` is the one allowed correction. The Send
+  Activity panel is a server-sent event stream and falls back to polling. An idempotency key is
+  unique per organization for 24 hours. The organization send ceiling defaults to 20 per second and
+  can be raised with `ORG_SENDS_PER_SECOND` for a local load test. Network (MCC/MNC) is not resolved;
+  quotes use the country-wide route.
+- `AUTO_APPROVE_TEMPLATES` stays `false` in the repository and in both Compose files. Production
+  `/opt/smsvio/.env` sets it to `true` so Send is usable before the admin review queue exists. It
+  returns to `false` when that queue ships in Phase 6.
+- An organization that is not `ACTIVE` or `SUSPENDED` may send only to the signed-in user's verified
+  account phone. The admin Organizations screen can set that organization to `ACTIVE`.
+- Message validity is 72 hours. A temporary failure retries the same route three times, then the next
+  route. A permanent failure moves on immediately. No remaining route fails the message with
+  `no_route`. The in-memory burst used by the worker test is the double-charge proof. A ten-minute
+  100-per-second run is not part of CI.

@@ -19,6 +19,17 @@ export const workerEnvSchema = z.object({
   SENTRY_DSN: optionalEnv(httpUrlSchema),
   SENTRY_ENVIRONMENT: optionalEnv(z.string().min(1)),
   APP_RELEASE: optionalEnv(z.string().min(1)),
+  /** When set, simulated delivery receipts are posted to the provider hook on this origin. */
+  API_INTERNAL_URL: optionalEnv(
+    z.string().refine((value) => {
+      try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    }),
+  ),
 });
 
 export type WorkerEnv = z.output<typeof workerEnvSchema>;

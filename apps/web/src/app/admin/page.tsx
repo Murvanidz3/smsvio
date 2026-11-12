@@ -65,7 +65,7 @@ export default function AdminOrganizationsPage() {
   async function setStatus(organization: AdminOrganization) {
     setBusy(true);
     try {
-      const next = organization.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+      const next = organization.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
       const result = await adminApi.setStatus(organization.id, next);
       toast(result.message);
       await queryClient.invalidateQueries({ queryKey: ['admin-organizations'] });
@@ -218,7 +218,7 @@ export default function AdminOrganizationsPage() {
                           void setStatus(organization);
                         }}
                       >
-                        {organization.status === 'SUSPENDED' ? 'Activate' : 'Suspend'}
+                        {organization.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
                       </Button>
                     </div>
                   </td>

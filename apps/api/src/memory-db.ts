@@ -117,13 +117,49 @@ interface MessageRow {
   id: string;
   organizationId: string;
   templateId: string | null;
+  templateVars: unknown;
   to: string;
-  fromSender: string | null;
+  fromSender: string;
   body: string;
   direction: 'OUTBOUND' | 'INBOUND';
+  encoding: string;
+  segments: number;
+  countryIso2: string | null;
+  mccmnc: string | null;
   status: string;
+  errorCode: string | null;
+  providerId: string | null;
+  providerMessageId: string | null;
+  routeId: string | null;
+  priceMicros: bigint | null;
+  costMicros: bigint | null;
+  clientRef: string | null;
+  apiKeyId: string | null;
+  userId: string | null;
+  scheduledAt: Date | null;
+  queuedAt: Date | null;
+  sentAt: Date | null;
+  deliveredAt: Date | null;
+  failedAt: Date | null;
+  attempt: number;
+  failedRouteIds: string[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+interface MessageEventRow {
+  id: string;
+  messageId: string;
+  status: string;
+  detail: string | null;
+  providerRaw: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface MessageInclude {
+  template?: { select?: { name?: boolean; category?: boolean } } | boolean;
+  events?: { orderBy?: { createdAt: 'asc' | 'desc' } } | boolean;
 }
 
 interface CountryRow {
@@ -179,26 +215,56 @@ function isWhere(value: unknown): value is Where {
 }
 
 function matchFilter(value: unknown, filter: Record<string, unknown>): boolean {
+  let saw = false;
   if ('gt' in filter) {
-    return (
-      value instanceof Date && filter.gt instanceof Date && value.getTime() > filter.gt.getTime()
-    );
+    saw = true;
+    if (!(
+      value instanceof Date &&
+      filter.gt instanceof Date &&
+      value.getTime() > filter.gt.getTime()
+    )) {
+      return false;
+    }
   }
   if ('gte' in filter) {
-    return (
-      value instanceof Date && filter.gte instanceof Date && value.getTime() >= filter.gte.getTime()
-    );
+    saw = true;
+    if (!(
+      value instanceof Date &&
+      filter.gte instanceof Date &&
+      value.getTime() >= filter.gte.getTime()
+    )) {
+      return false;
+    }
+  }
+  if ('lt' in filter) {
+    saw = true;
+    if (!(
+      value instanceof Date &&
+      filter.lt instanceof Date &&
+      value.getTime() < filter.lt.getTime()
+    )) {
+      return false;
+    }
   }
   if ('not' in filter) {
-    return value !== filter.not;
+    saw = true;
+    if (value === filter.not) {
+      return false;
+    }
   }
   if ('in' in filter && Array.isArray(filter.in)) {
-    return filter.in.includes(value);
+    saw = true;
+    if (!filter.in.includes(value)) {
+      return false;
+    }
   }
   if ('contains' in filter && typeof filter.contains === 'string') {
-    return typeof value === 'string' && contains(value, filter.contains);
+    saw = true;
+    if (!(typeof value === 'string' && contains(value, filter.contains))) {
+      return false;
+    }
   }
-  return false;
+  return saw;
 }
 
 function pageOf<T>(rows: readonly T[], skip?: number, take?: number): T[] {
@@ -276,11 +342,35 @@ export function createMemoryDb() {
   const contacts = new Map<string, ContactRow>();
   const templates = new Map<string, TemplateRow>();
   const messages = new Map<string, MessageRow>();
+  const messageEvents: MessageEventRow[] = [];
   const countries = new Map<string, CountryRow>();
   const messaging = createMessagingMemory();
 
   function userByEmail(email: string): UserRow | null {
     return [...users.values()].find((user) => user.email === email) ?? null;
+  }
+
+  function withMessageInclude(row: MessageRow, include?: MessageInclude) {
+    if (include === undefined) {
+      return row;
+    }
+    const template =
+      include.template === undefined
+        ? undefined
+        : row.templateId === null
+          ? null
+          : (templates.get(row.templateId) ?? null);
+    const events =
+      include.events === undefined
+        ? undefined
+        : messageEvents
+            .filter((event) => event.messageId === row.id)
+            .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+    return {
+      ...row,
+      ...(template === undefined ? {} : { template }),
+      ...(events === undefined ? {} : { events }),
+    };
   }
 
   function withMemberships(user: UserRow) {
@@ -796,16 +886,28 @@ export function createMemoryDb() {
       },
     },
     message: {
+      count: ({ where }: { where?: Where }) =>
+        Promise.resolve([...messages.values()].filter((row) => matches(row, where ?? {})).length),
+      findUnique: ({ where }: { where: { id: string } }) =>
+        Promise.resolve(messages.get(where.id) ?? null),
+      findFirst: ({ where, include }: { where: Where; include?: MessageInclude }) => {
+        const row = [...messages.values()].find((item) => matches(item, where));
+        return Promise.resolve(row === undefined ? null : withMessageInclude(row, include));
+      },
       findMany: ({
         where,
         orderBy,
+        skip,
         take,
         select,
+        include,
       }: {
         where?: Where;
         orderBy?: Record<string, 'asc' | 'desc'>;
+        skip?: number;
         take?: number;
         select?: Record<string, boolean>;
+        include?: MessageInclude;
       }) =>
         Promise.resolve(
           pageOf(
@@ -813,25 +915,94 @@ export function createMemoryDb() {
               [...messages.values()].filter((row) => matches(row, where ?? {})),
               orderBy,
             ),
-            0,
+            skip,
             take,
-          ).map((row) => projected(row, select)),
+          ).map((row) =>
+            select === undefined ? withMessageInclude(row, include) : projected(row, select),
+          ),
         ),
       create: ({
         data,
       }: {
-        data: Omit<MessageRow, 'id' | 'createdAt' | 'updatedAt' | 'templateId' | 'fromSender'> &
-          Partial<MessageRow>;
+        data: Partial<MessageRow> &
+          Pick<MessageRow, 'organizationId' | 'to' | 'body' | 'direction' | 'status'>;
       }) => {
+        if (
+          data.clientRef !== undefined &&
+          data.clientRef !== null &&
+          [...messages.values()].some(
+            (row) => row.organizationId === data.organizationId && row.clientRef === data.clientRef,
+          )
+        ) {
+          uniqueConflict();
+        }
         const row: MessageRow = {
           templateId: null,
-          fromSender: null,
+          templateVars: null,
+          fromSender: '',
+          encoding: 'GSM-7',
+          segments: 1,
+          countryIso2: null,
+          mccmnc: null,
+          errorCode: null,
+          providerId: null,
+          providerMessageId: null,
+          routeId: null,
+          priceMicros: null,
+          costMicros: null,
+          clientRef: null,
+          apiKeyId: null,
+          userId: null,
+          scheduledAt: null,
+          queuedAt: null,
+          sentAt: null,
+          deliveredAt: null,
+          failedAt: null,
+          attempt: 0,
+          failedRouteIds: [],
           ...stamp(),
           ...data,
         };
         messages.set(row.id, row);
         return Promise.resolve(row);
       },
+      update: ({ where, data }: { where: { id: string }; data: Partial<MessageRow> }) => {
+        const row = messages.get(where.id);
+        if (row === undefined) {
+          throw new Error(`missing message ${where.id}`);
+        }
+        Object.assign(row, data, { updatedAt: new Date() });
+        return Promise.resolve(row);
+      },
+      updateMany: ({ where, data }: { where: Where; data: Partial<MessageRow> }) => {
+        const rows = [...messages.values()].filter((row) => matches(row, where));
+        for (const row of rows) {
+          Object.assign(row, data, { updatedAt: new Date() });
+        }
+        return Promise.resolve({ count: rows.length });
+      },
+    },
+    messageEvent: {
+      create: ({
+        data,
+      }: {
+        data: Omit<MessageEventRow, 'id' | 'createdAt' | 'updatedAt' | 'detail' | 'providerRaw'> &
+          Partial<MessageEventRow>;
+      }) => {
+        const now = new Date();
+        const row: MessageEventRow = {
+          id: randomUUID(),
+          detail: null,
+          providerRaw: null,
+          createdAt: now,
+          updatedAt: now,
+          ...data,
+        };
+        messageEvents.push(row);
+        return Promise.resolve(row);
+      },
+      findMany: ({ where }: { where?: Where }) =>
+        Promise.resolve(messageEvents.filter((row) => matches(row, where ?? {}))),
     },
     country: {
       findUnique: ({ where }: { where: { iso2: string } }) =>

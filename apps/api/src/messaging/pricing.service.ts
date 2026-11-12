@@ -27,6 +27,16 @@ interface Quote {
 export class PricingService {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
+  async quoteOne(
+    organizationId: string,
+    countryIso2: string,
+    mccmnc: string | null,
+  ): Promise<Quote | null> {
+    const graph = await this.graph();
+    const orgRates = await this.prisma.orgRate.findMany({ where: { organizationId } });
+    return quoteDestination(graph, orgRates, { countryIso2, mccmnc }, new Date());
+  }
+
   async quoteMap(organizationId: string | null): Promise<Map<string, Quote>> {
     const graph = await this.graph();
     const orgRates =

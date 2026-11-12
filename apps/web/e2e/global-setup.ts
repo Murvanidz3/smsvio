@@ -96,6 +96,20 @@ export default async function globalSetup(): Promise<void> {
       },
     });
     children.push(child);
+    const worker: ChildProcess = spawn(process.execPath, ['apps/worker/dist/main.js'], {
+      cwd: root,
+      detached: true,
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        LOG_LEVEL: 'silent',
+        DATABASE_URL: process.env.DATABASE_URL,
+        REDIS_URL: process.env.REDIS_URL,
+        API_INTERNAL_URL: `http://127.0.0.1:${apiPort}`,
+      },
+    });
+    children.push(worker);
   }
   const mock: ChildProcess = spawn(process.execPath, ['apps/web/e2e/google-mock.mjs'], {
     cwd: root,

@@ -45,6 +45,9 @@ export interface ProviderHealth {
   readonly detail: string;
 }
 
+/** Well-known signature for the simulated provider. It is not a carrier credential. */
+export const MOCK_CALLBACK_SECRET = 'smsvio-mock-callback';
+
 const DELIVERED_DELAY_MS = 1000;
 const SLOW_DELAY_MS = 30_000;
 

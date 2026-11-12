@@ -63,6 +63,8 @@ export const apiEnvSchema = z
      * When true, submitting a template approves it. Otherwise it waits for an operator.
      * The admin review queue arrives in a later phase.
      */
+    /** Dashboard and internal sends per organization per second. The load test raises it. */
+    ORG_SENDS_PER_SECOND: z.coerce.number().int().min(1).max(5_000).default(20),
     AUTO_APPROVE_TEMPLATES: z.preprocess(
       (value) => (value === '' || value === undefined ? 'false' : value),
       z.enum(['true', 'false']),

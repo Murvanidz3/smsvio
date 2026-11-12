@@ -1,4 +1,4 @@
-export { MockProvider, hashProviderSecret, mockSuffix } from './mock.js';
+export { MOCK_CALLBACK_SECRET, MockProvider, hashProviderSecret, mockSuffix } from './mock.js';
 export type {
   MockReceiptStatus,
   ProviderHealth,

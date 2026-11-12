@@ -302,6 +302,8 @@ model Message {
   sentAt            DateTime?
   deliveredAt       DateTime?
   failedAt          DateTime?
+  attempt           Int              @default(0)
+  failedRouteIds    String[]         @default([])
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
   organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -309,6 +311,7 @@ model Message {
   user              User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   provider          Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
   route             Route?           @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  events            MessageEvent[]
 
   @@index([organizationId, createdAt(sort: Desc)])
   @@index([organizationId, status, createdAt])
@@ -316,6 +319,20 @@ model Message {
   @@unique([providerId, providerMessageId])
   @@unique([organizationId, clientRef])
   @@map("messages")
+}
+
+model MessageEvent {
+  id          String        @id @default(uuid()) @db.Uuid
+  messageId   String        @db.Uuid
+  status      MessageStatus
+  detail      String?
+  providerRaw Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  message     Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId, createdAt])
+  @@map("message_events")
 }
 
 enum ProviderType {

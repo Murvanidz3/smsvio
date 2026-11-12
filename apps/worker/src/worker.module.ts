@@ -5,6 +5,7 @@ import { createLoggerModule, PrismaModule, RedisModule } from '@smsvio/server';
 import type { WorkerEnv } from './env.js';
 import { HEARTBEAT_SETTINGS, HeartbeatService, type HeartbeatSettings } from './heartbeat.js';
 import { LedgerSweep } from './ledger-sweep.js';
+import { SendLoop } from './send-loop.js';
 
 @Module({})
 export class WorkerModule {
@@ -28,6 +29,7 @@ export class WorkerModule {
         { provide: HEARTBEAT_SETTINGS, useValue: heartbeat },
         HeartbeatService,
         LedgerSweep,
+        SendLoop,
       ],
     };
   }

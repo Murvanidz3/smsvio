@@ -22,6 +22,18 @@ export function selectPrimaryRoute<T extends RouteCandidate>(
   return pool.slice().sort(compareRoutes)[0] ?? null;
 }
 
+/** Network-specific routes first, then country-wide routes. Each group uses the primary-route order. */
+export function orderedRoutes<T extends RouteCandidate>(
+  routes: readonly T[],
+  countryIso2: string,
+  mccmnc: string | null,
+): T[] {
+  const enabled = routes.filter((route) => route.enabled && route.countryIso2 === countryIso2);
+  const specific = mccmnc === null ? [] : enabled.filter((route) => route.mccmnc === mccmnc);
+  const countryWide = enabled.filter((route) => route.mccmnc === null);
+  return [...specific.slice().sort(compareRoutes), ...countryWide.slice().sort(compareRoutes)];
+}
+
 function compareRoutes(left: RouteCandidate, right: RouteCandidate): number {
   if (left.priority !== right.priority) {
     return left.priority - right.priority;

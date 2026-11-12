@@ -43,13 +43,32 @@ export { MAX_CSV_ROWS, parseCsv } from './csv.js';
 export type { CsvResult } from './csv.js';
 export { SMS_ERRORS, smsErrorMessage } from './errors.js';
 export {
+  CALLBACK_DELAY_KEY,
+  IDEMPOTENCY_TTL_MS,
+  MESSAGE_STATES,
+  MESSAGE_VALIDITY_MS,
+  ORG_SENDS_PER_SECOND,
+  RECEIPT_QUEUE_KEY,
+  SEND_ATTEMPTS_PER_ROUTE,
+  SEND_DELAY_KEY,
+  SEND_QUEUE_KEY,
+  receiptMember,
+  retryDelayMs,
+  sendLockKey,
+  spendAllowed,
+  transitionMessage,
+} from './pipeline.js';
+export type { MessageState } from './pipeline.js';
+export {
   analyticsQuerySchema,
   contactListSchema,
   createContactSchema,
   galleryCopySchema,
   importContactsSchema,
   lookupSchema,
+  messageListSchema,
   saveTemplateSchema,
+  sendMessageSchema,
   templateListSchema,
 } from './schemas.js';
 export type { SmsErrorCode } from './errors.js';

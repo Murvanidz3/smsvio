@@ -20,7 +20,12 @@ export {
   parseUsdToMicros,
   quoteFromCost,
 } from './money.js';
-export { currentFixedPrice, resolveCustomerPrice, selectPrimaryRoute } from './pricing.js';
+export {
+  currentFixedPrice,
+  orderedRoutes,
+  resolveCustomerPrice,
+  selectPrimaryRoute,
+} from './pricing.js';
 export type { PriceSource, PricedRate, RouteCandidate } from './pricing.js';
 export { LEDGER_TYPES, ledgerDifferences } from './ledger.js';
 export type { BalanceSnapshot, LedgerDifference, LedgerSnapshot, LedgerType } from './ledger.js';

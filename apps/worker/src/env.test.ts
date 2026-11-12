@@ -23,6 +23,23 @@ describe('loadWorkerEnv', () => {
     });
   });
 
+  it('accepts an internal API origin without a public suffix', () => {
+    expect(
+      loadWorkerEnv({
+        REDIS_URL: 'redis://redis:6379',
+        DATABASE_URL: 'postgresql://smsvio:pw@postgres:5432/smsvio',
+        API_INTERNAL_URL: 'http://api:4000',
+      }).API_INTERNAL_URL,
+    ).toBe('http://api:4000');
+    expect(() =>
+      loadWorkerEnv({
+        REDIS_URL: 'redis://redis:6379',
+        DATABASE_URL: 'postgresql://smsvio:pw@postgres:5432/smsvio',
+        API_INTERNAL_URL: 'not a url',
+      }),
+    ).toThrow(/API_INTERNAL_URL/);
+  });
+
   it('rejects a heartbeat interval below one second', () => {
     expect(() =>
       loadWorkerEnv({
