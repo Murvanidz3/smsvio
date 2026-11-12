@@ -4,7 +4,7 @@
  */
 import { execFileSync } from 'node:child_process';
 
-const base = process.env.LOAD_BASE_URL ?? 'http://127.0.0.1:8080';
+const base = process.env.LOAD_BASE_URL ?? 'http://localhost:8080';
 const origin = new URL(base);
 if (origin.hostname !== 'localhost' && origin.hostname !== '127.0.0.1') {
   throw new Error(`Refusing to load-test ${origin.hostname}. Use the local Compose stack.`);
@@ -57,7 +57,8 @@ async function call(path, { method = 'GET', body } = {}) {
   const text = await response.text();
   const payload = text === '' ? null : JSON.parse(text);
   if (!response.ok) {
-    const message = payload && typeof payload === 'object' && 'message' in payload ? payload.message : text;
+    const message =
+      payload && typeof payload === 'object' && 'message' in payload ? payload.message : text;
     throw new Error(`${method} ${path} returned ${String(response.status)}: ${String(message)}`);
   }
   return { status: response.status, payload };
@@ -209,9 +210,7 @@ async function drain() {
   const deadline = Date.now() + 8 * 60 * 1000;
   let pending = '';
   while (Date.now() < deadline) {
-    pending = sql(
-      "SELECT count(*) FROM messages WHERE status IN ('QUEUED', 'SENDING', 'SENT')",
-    );
+    pending = sql("SELECT count(*) FROM messages WHERE status IN ('QUEUED', 'SENDING', 'SENT')");
     if (pending === '0') {
       return;
     }

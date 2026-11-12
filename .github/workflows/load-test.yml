@@ -21,7 +21,7 @@ jobs:
       - name: Send against Compose
         run: node scripts/load-test.mjs
         env:
-          LOAD_BASE_URL: http://127.0.0.1:8080
+          LOAD_BASE_URL: http://localhost:8080
 
       - name: Show service logs
         if: failure()
