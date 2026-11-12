@@ -258,6 +258,12 @@ function matchFilter(value: unknown, filter: Record<string, unknown>): boolean {
       return false;
     }
   }
+  if ('notIn' in filter && Array.isArray(filter.notIn)) {
+    saw = true;
+    if (filter.notIn.includes(value)) {
+      return false;
+    }
+  }
   if ('contains' in filter && typeof filter.contains === 'string') {
     saw = true;
     if (!(typeof value === 'string' && contains(value, filter.contains))) {
@@ -903,6 +909,14 @@ export function createMemoryDb() {
     message: {
       count: ({ where }: { where?: Where }) =>
         Promise.resolve([...messages.values()].filter((row) => matches(row, where ?? {})).length),
+      aggregate: ({ where, _sum }: { where?: Where; _sum?: { priceMicros?: boolean } }) => {
+        const rows = [...messages.values()].filter((row) => matches(row, where ?? {}));
+        const priceMicros =
+          _sum?.priceMicros === true
+            ? rows.reduce((sum, row) => sum + (row.priceMicros ?? 0n), 0n)
+            : null;
+        return Promise.resolve({ _sum: { priceMicros } });
+      },
       findUnique: ({ where }: { where: { id: string } }) =>
         Promise.resolve(messages.get(where.id) ?? null),
       findFirst: ({ where, include }: { where: Where; include?: MessageInclude }) => {

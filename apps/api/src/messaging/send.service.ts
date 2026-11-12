@@ -330,15 +330,16 @@ export class SendService {
   private async spentToday(organizationId: string): Promise<bigint> {
     const start = new Date();
     start.setUTCHours(0, 0, 0, 0);
-    const rows = await this.prisma.message.findMany({
-      where: { organizationId, createdAt: { gte: start } },
+    const aggregate = await this.prisma.message.aggregate({
+      where: {
+        organizationId,
+        createdAt: { gte: start },
+        status: { notIn: ['FAILED', 'REJECTED'] },
+        priceMicros: { not: null },
+      },
+      _sum: { priceMicros: true },
     });
-    return rows.reduce((sum, row) => {
-      if (row.status === 'FAILED' || row.status === 'REJECTED' || row.priceMicros === null) {
-        return sum;
-      }
-      return sum + row.priceMicros;
-    }, 0n);
+    return aggregate._sum.priceMicros ?? 0n;
   }
 
   private async spendCap(organizationId: string): Promise<bigint> {

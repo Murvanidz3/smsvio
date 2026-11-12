@@ -151,7 +151,7 @@ async function sendAll(templateId) {
   const started = Date.now();
 
   async function one(index) {
-    while (inFlight >= 400) {
+    while (inFlight >= 100) {
       await new Promise((resolve) => {
         waiters.push(resolve);
       });
@@ -173,6 +173,7 @@ async function sendAll(templateId) {
           country: 'DE',
           clientRef: `load-${String(index)}`,
         }),
+        signal: AbortSignal.timeout(30_000),
       });
       await response.arrayBuffer();
       if (response.status === 202) {
@@ -190,7 +191,13 @@ async function sendAll(templateId) {
 
   /** @type {Promise<void>[]} */
   const tasks = [];
+  let reportedSecond = -1;
   while (cursor < total) {
+    const second = Math.floor((Date.now() - started) / 1000);
+    if (second !== reportedSecond && second % 30 === 0) {
+      reportedSecond = second;
+      console.log(JSON.stringify({ second, scheduled: cursor, accepted, rejected, inFlight }));
+    }
     const due = Math.min(total, Math.floor(((Date.now() - started) / 1000) * rate));
     while (cursor < due) {
       tasks.push(one(cursor));
