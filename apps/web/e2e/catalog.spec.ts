@@ -32,7 +32,7 @@ test.describe('catalog', () => {
 
     await openDashboardLink(page, 'Contacts');
     await expect(page.getByRole('heading', { name: 'Contacts', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Create contact' }).click();
+    await page.getByRole('button', { name: 'Create contact' }).first().click();
     const create = page.getByRole('dialog', { name: 'Create contact' });
     await create.getByRole('textbox', { name: 'Phone', exact: true }).fill(phone);
     await create

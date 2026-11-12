@@ -82,8 +82,10 @@ test('sends an approved template and shows it as delivered', async ({ page }, te
   ).toBeVisible({ timeout: 20_000 });
 
   await openDashboardLink(page, 'Messages');
-  await page.getByLabel('Search').fill(phone);
-  await expect(page.getByRole('cell', { name: phone })).toBeVisible();
-  await page.getByRole('cell', { name: phone }).first().click();
+  await expect(page.getByRole('heading', { name: 'Messages', exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Search', exact: true }).fill(phone);
+  const message = page.getByRole('cell', { name: phone }).first();
+  await expect(message).toBeVisible();
+  await message.click();
   await expect(page.getByRole('dialog').getByText('Hello from SMSVIO')).toBeVisible();
 });
