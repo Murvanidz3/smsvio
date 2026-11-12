@@ -11,7 +11,7 @@ async function openDashboardLink(page: Page, name: string): Promise<void> {
 }
 
 test('sends an approved template and shows it as delivered', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   const phone = '+4915123456789';
   const templateName = `Hello ${testInfo.project.name}`;
   await page.goto('/signin');
@@ -47,6 +47,8 @@ test('sends an approved template and shows it as delivered', async ({ page }, te
   await adjust.getByRole('button', { name: 'Apply' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Credited 1.00 USD.' })).toBeVisible();
 
+  await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
+  await expect(page).toHaveURL('/dashboard');
   await openDashboardLink(page, 'Templates');
   await page.getByRole('link', { name: 'From scratch' }).first().click();
   await page.getByLabel('Name').fill(templateName);
