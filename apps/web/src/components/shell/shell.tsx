@@ -21,6 +21,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
 
 import { Logo } from '@/components/brand/logo';
+import { MenuPin, useMenuPin } from '@/components/shell/menu-pin';
 import { RailLink } from '@/components/shell/rail';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [clock, setClock] = useState('');
+  const { pinned, togglePin } = useMenuPin();
 
   useEffect(() => {
     const tick = () => {
@@ -106,68 +108,72 @@ export function Shell({ children }: { children: ReactNode }) {
   const data = session.data;
 
   return (
-    <div className="bg-background flex min-h-dvh">
-      <aside className="border-sidebar-border bg-sidebar text-sidebar-foreground hidden w-[68px] shrink-0 flex-col items-center gap-1 border-r px-2.5 py-4 md:flex">
-        <Nav pathname={pathname} />
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center gap-3 px-4 sm:px-7">
+    <div className="bg-background min-h-dvh">
+      <header className="vio-topbar border-sidebar-border bg-sidebar flex items-center gap-3 border-b px-4 sm:px-[18px]">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="md:hidden"
+          aria-label="Open menu"
+          onClick={() => {
+            setMenuOpen(true);
+          }}
+        >
+          <Menu aria-hidden />
+        </Button>
+        <Link href="/dashboard" aria-label="SMSVIO home">
+          <Logo />
+        </Link>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-muted-foreground hidden font-medium tabular-nums sm:inline">
+            {clock}
+          </span>
           <Button
             type="button"
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            aria-label="Open menu"
+            variant="outline"
+            className="h-[38px] rounded-[9px] px-3 shadow-sm"
+            aria-label="Search"
             onClick={() => {
-              setMenuOpen(true);
+              setPaletteOpen(true);
             }}
           >
-            <Menu aria-hidden />
+            <Search data-icon="inline-start" aria-hidden />
+            <span className="hidden sm:inline">Search</span>
+            <kbd className="text-muted-foreground hidden text-xs sm:inline">Ctrl K</kbd>
           </Button>
-          <Link href="/dashboard" aria-label="SMSVIO home">
-            <Logo />
-          </Link>
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-muted-foreground hidden font-medium tabular-nums sm:inline">
-              {clock}
+          {data?.organization === null || data?.organization === undefined ? null : (
+            <OrgSwitcher session={data} />
+          )}
+          {data?.organization === null || data?.organization === undefined ? null : (
+            <span className="bg-accent text-accent-foreground rounded-full px-2 py-0.5 text-xs font-semibold">
+              {data.organization.role}
             </span>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-[38px] rounded-[9px] px-3 shadow-sm"
-              aria-label="Search"
-              onClick={() => {
-                setPaletteOpen(true);
-              }}
-            >
-              <Search data-icon="inline-start" aria-hidden />
-              <span className="hidden sm:inline">Search</span>
-              <kbd className="text-muted-foreground hidden text-xs sm:inline">Ctrl K</kbd>
-            </Button>
-            {data?.organization === null || data?.organization === undefined ? null : (
-              <OrgSwitcher session={data} />
-            )}
-            {data?.organization === null || data?.organization === undefined ? null : (
-              <span className="bg-accent text-accent-foreground rounded-full px-2 py-0.5 text-xs font-semibold">
-                {data.organization.role}
-              </span>
-            )}
-            {data?.user.isPlatformAdmin === true ? (
-              <Link href="/admin" className="text-sm font-medium">
-                Admin
-              </Link>
-            ) : null}
-            <ThemeToggle />
-            <Button
-              type="button"
-              variant="outline"
-              className="h-[38px] rounded-[9px] px-3 shadow-sm"
-              onClick={() => void signOut()}
-            >
-              Sign out
-            </Button>
-          </div>
-        </header>
+          )}
+          {data?.user.isPlatformAdmin === true ? (
+            <Link href="/admin" className="text-sm font-medium">
+              Admin
+            </Link>
+          ) : null}
+          <ThemeToggle />
+          <Button
+            type="button"
+            variant="outline"
+            className="h-[38px] rounded-[9px] px-3 shadow-sm"
+            onClick={() => void signOut()}
+          >
+            Sign out
+          </Button>
+        </div>
+      </header>
+      <aside
+        className="vio-side border-sidebar-border bg-sidebar text-sidebar-foreground border-r"
+        data-pinned={pinned ? 'true' : 'false'}
+      >
+        <Nav pathname={pathname} />
+        <MenuPin pinned={pinned} onToggle={togglePin} />
+      </aside>
+      <div className="vio-canvas flex min-w-0 flex-col">
         {data?.organization?.status === 'PENDING_VERIFICATION' ? (
           <p className="bg-accent text-accent-foreground px-4 py-2 text-sm">
             This organization is waiting for business verification.{' '}
@@ -179,13 +185,13 @@ export function Shell({ children }: { children: ReactNode }) {
             </Link>
           </p>
         ) : null}
-        <main className="min-w-0 flex-1 px-4 pt-1 pb-6 sm:px-7">
+        <main className="min-w-0 flex-1 px-4 pt-6 pb-6 sm:px-7">
           {session.isPending ? <p className="text-muted-foreground text-sm">Loading…</p> : children}
         </main>
       </div>
       {menuOpen ? (
         <div
-          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          className="fixed inset-0 z-[60] bg-black/40 md:hidden"
           onClick={() => {
             setMenuOpen(false);
           }}
@@ -224,18 +230,18 @@ export function Shell({ children }: { children: ReactNode }) {
 function Nav({ pathname, showLabels = false }: { pathname: string; showLabels?: boolean }) {
   return (
     <nav
-      className={showLabels ? 'grid gap-4' : 'grid justify-items-center gap-2'}
+      className={showLabels ? 'grid gap-4' : 'grid min-h-0 flex-1 gap-1 overflow-y-auto'}
       aria-label="Dashboard"
     >
-      {GROUPS.map((group, index) => (
-        <div key={group} className={showLabels ? 'grid gap-1' : 'grid justify-items-center gap-1'}>
+      {GROUPS.map((group) => (
+        <div key={group} className={showLabels ? 'grid gap-1' : 'grid gap-0.5'}>
           {showLabels ? (
             <p className="text-muted-foreground px-3 text-xs font-semibold tracking-wide">
               {group}
             </p>
-          ) : index > 0 ? (
-            <span className="bg-sidebar-border my-1 h-px w-6" />
-          ) : null}
+          ) : (
+            <p className="vio-group text-muted-foreground">{group}</p>
+          )}
           {NAV.filter((item) => item.group === group).map((item) => (
             <RailLink
               key={item.href}
@@ -248,29 +254,21 @@ function Nav({ pathname, showLabels = false }: { pathname: string; showLabels?: 
           ))}
         </div>
       ))}
-      <div className={showLabels ? 'grid gap-1' : 'grid justify-items-center gap-1'}>
+      <div className={showLabels ? 'grid gap-1' : 'grid gap-0.5'}>
         {showLabels ? (
           <p className="text-muted-foreground px-3 text-xs font-semibold tracking-wide">Help</p>
         ) : (
-          <span className="bg-sidebar-border mb-1 h-px w-6" />
+          <p className="vio-group text-muted-foreground">Help</p>
         )}
         <a
-          className={
-            showLabels
-              ? 'hover:bg-sidebar-accent rounded-[10px] px-3 py-2 text-sm font-medium'
-              : 'hover:bg-sidebar-accent grid size-11 place-items-center rounded-[10px]'
-          }
+          className="hover:bg-sidebar-accent flex min-h-11 w-full items-center gap-3 rounded-[10px] px-[13px] text-sm font-medium whitespace-nowrap"
           href="mailto:support@smsvio.com"
           title="Support"
         >
-          {showLabels ? (
-            'Support'
-          ) : (
-            <>
-              <span className="sr-only">Support</span>
-              <span aria-hidden>?</span>
-            </>
-          )}
+          <span className="grid size-[22px] shrink-0 place-items-center" aria-hidden>
+            ?
+          </span>
+          <span className={showLabels ? undefined : 'vio-lbl'}>Support</span>
         </a>
       </div>
     </nav>

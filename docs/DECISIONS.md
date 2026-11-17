@@ -384,7 +384,10 @@ tokens are the light theme. The dark theme is the same structure with the canvas
 and cards inverted. SMSVIO keeps its own name, mark, and wording.
 
 - Type: Outfit for the interface, JetBrains Mono for identifiers.
-- Chrome: a 68px icon rail, a top bar with the wordmark and clock, 18px cards, 9px buttons.
+- Chrome: a 68px icon rail under a full-width top bar. Hovering the rail opens it to 252px
+  and shows the labels, the same way the operator console does. A pin keeps that open menu
+  on screen; unpinning closes it back to the icon rail. The choice is stored in
+  `smsvio.menu.pin`. The menu starts pinned.
 - Pages and actions stay the ones SMSVIO already has. SMPP desks, short links, stuck
   delivery receipts, and the other operator tools on that site are not copied as empty
   screens. They need their own backend before they appear here.

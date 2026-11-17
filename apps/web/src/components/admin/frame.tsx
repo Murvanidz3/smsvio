@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
 
 import { Logo } from '@/components/brand/logo';
+import { MenuPin, useMenuPin } from '@/components/shell/menu-pin';
 import { RailLink } from '@/components/shell/rail';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ function current(pathname: string, href: string): boolean {
 export function AdminFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { pinned, togglePin } = useMenuPin();
   const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
   if (session.data !== undefined && !session.data.user.isPlatformAdmin) {
     return (
@@ -35,9 +37,35 @@ export function AdminFrame({ children }: { children: ReactNode }) {
     );
   }
   return (
-    <div className="bg-background flex min-h-dvh">
-      <aside className="border-sidebar-border bg-sidebar hidden w-[68px] shrink-0 flex-col items-center gap-1 border-r px-2.5 py-4 md:flex">
-        <nav className="grid justify-items-center gap-1" aria-label="Admin">
+    <div className="bg-background min-h-dvh">
+      <header className="vio-topbar border-sidebar-border bg-sidebar flex items-center gap-3 border-b px-4 sm:px-[18px]">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="md:hidden"
+          aria-label="Open menu"
+          onClick={() => {
+            setMenuOpen(true);
+          }}
+        >
+          <Menu aria-hidden />
+        </Button>
+        <Link href="/dashboard" aria-label="SMSVIO home">
+          <Logo />
+        </Link>
+        <div className="ml-auto flex items-center gap-3">
+          <Link href="/dashboard" className="text-sm font-semibold">
+            Dashboard
+          </Link>
+          <ThemeToggle />
+        </div>
+      </header>
+      <aside
+        className="vio-side border-sidebar-border bg-sidebar text-sidebar-foreground border-r"
+        data-pinned={pinned ? 'true' : 'false'}
+      >
+        <nav className="grid min-h-0 flex-1 gap-0.5 overflow-y-auto" aria-label="Admin">
           {LINKS.map((link) => (
             <RailLink
               key={link.href}
@@ -48,32 +76,10 @@ export function AdminFrame({ children }: { children: ReactNode }) {
             />
           ))}
         </nav>
+        <MenuPin pinned={pinned} onToggle={togglePin} />
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center gap-3 px-4 sm:px-7">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="md:hidden"
-            aria-label="Open menu"
-            onClick={() => {
-              setMenuOpen(true);
-            }}
-          >
-            <Menu aria-hidden />
-          </Button>
-          <Link href="/dashboard" aria-label="SMSVIO home">
-            <Logo />
-          </Link>
-          <div className="ml-auto flex items-center gap-3">
-            <Link href="/dashboard" className="text-sm font-semibold">
-              Dashboard
-            </Link>
-            <ThemeToggle />
-          </div>
-        </header>
-        <nav className="flex gap-1 overflow-x-auto px-4 pb-3 md:hidden" aria-label="Admin">
+      <div className="vio-canvas flex min-w-0 flex-col">
+        <nav className="flex gap-1 overflow-x-auto px-4 pt-3 pb-3 md:hidden" aria-label="Admin">
           {LINKS.map((link) => (
             <RailLink
               key={link.href}
@@ -89,7 +95,7 @@ export function AdminFrame({ children }: { children: ReactNode }) {
       </div>
       {menuOpen ? (
         <div
-          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          className="fixed inset-0 z-[60] bg-black/40 md:hidden"
           onClick={() => {
             setMenuOpen(false);
           }}
