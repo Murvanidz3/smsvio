@@ -10,7 +10,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AtSign,
   BookOpen,
+  Calculator,
   Contact,
+  CreditCard,
   FileText,
   KeyRound,
   LayoutDashboard,
@@ -68,10 +70,23 @@ const NAV: readonly {
   { href: '/dashboard/users', label: 'Users', group: 'Account', icon: Users },
   { href: '/dashboard/settings', label: 'Settings', group: 'Account', icon: Settings },
   {
+    href: '/dashboard/billing',
+    label: 'Billing',
+    group: 'Account',
+    icon: CreditCard,
+    capability: 'billing',
+  },
+  {
     href: '/dashboard/tools/number-lookup',
     label: 'Number lookup',
     group: 'Tools',
     icon: ScanSearch,
+  },
+  {
+    href: '/dashboard/tools/pricing',
+    label: 'Pricing',
+    group: 'Tools',
+    icon: Calculator,
   },
 ];
 
@@ -406,6 +421,12 @@ function Palette({ role, onClose }: { role: MembershipRole | undefined; onClose:
       </div>
     </div>
   );
+}
+
+export function useCanBilling(): boolean {
+  const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
+  const role = session.data?.organization?.role;
+  return role !== undefined && roleAllows(role, 'billing');
 }
 
 export function useCanDeveloper(): boolean {

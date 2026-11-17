@@ -80,9 +80,15 @@ describe('HeartbeatService in the worker module', () => {
       .useValue(redis)
       .overrideProvider(PRISMA)
       .useValue({
-        orgBalance: { findMany: () => Promise.resolve([]) },
+        orgBalance: {
+          findMany: () => Promise.resolve([]),
+          findUnique: () => Promise.resolve(null),
+        },
         ledgerEntry: { findMany: () => Promise.resolve([]) },
         message: { findMany: () => Promise.resolve([]) },
+        organization: { findMany: () => Promise.resolve([]) },
+        billingProfile: { findMany: () => Promise.resolve([]) },
+        dailyUsage: { upsert: () => Promise.resolve({}) },
         $disconnect: () => Promise.resolve(),
       })
       .compile();

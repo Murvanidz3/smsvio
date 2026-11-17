@@ -116,6 +116,8 @@ model Organization {
   ledgerEntries LedgerEntry[]
   apiKeys      ApiKey[]
   webhookEndpoints WebhookEndpoint[]
+  billingProfile BillingProfile?
+  dailyUsage   DailyUsage[]
 
   @@index([status])
   @@map("organizations")
@@ -527,6 +529,46 @@ model LedgerEntry {
   @@index([organizationId, createdAt])
   @@index([organizationId, refId])
   @@map("ledger_entries")
+}
+
+/// Billing contact, low-balance mail, and auto-recharge settings. Charging a saved card waits for a payment provider.
+model BillingProfile {
+  organizationId              String       @id @db.Uuid
+  email                       String?
+  name                        String?
+  line1                       String?
+  line2                       String?
+  city                        String?
+  region                      String?
+  postalCode                  String?
+  countryIso2                 String?      @db.Char(2)
+  lowBalanceMicros            BigInt?
+  lowBalanceNotifiedAt        DateTime?
+  autoRechargeEnabled         Boolean      @default(false)
+  autoRechargeThresholdMicros BigInt?
+  autoRechargeAmountMicros    BigInt?
+  createdAt                   DateTime     @default(now())
+  updatedAt                   DateTime     @updatedAt
+  organization                Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("billing_profiles")
+}
+
+/// One row per organization per UTC day. The worker rewrites the open window every 15 minutes.
+model DailyUsage {
+  organizationId String       @db.Uuid
+  day            String       @db.Char(10)
+  sent           Int
+  delivered      Int
+  failed         Int
+  finalCount     Int
+  spendMicros    BigInt
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, day])
+  @@index([organizationId, day])
+  @@map("daily_usage")
 }
 
 /// Single row id `platform`. Organizations with a null spend cap inherit this value.

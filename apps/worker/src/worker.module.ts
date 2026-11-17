@@ -6,6 +6,7 @@ import { WORKER_ENV, type WorkerEnv } from './env.js';
 import { HEARTBEAT_SETTINGS, HeartbeatService, type HeartbeatSettings } from './heartbeat.js';
 import { LedgerSweep } from './ledger-sweep.js';
 import { SendLoop } from './send-loop.js';
+import { UsageLoop } from './usage-loop.js';
 import { WebhookLoop } from './webhook-loop.js';
 
 @Module({})
@@ -32,6 +33,7 @@ export class WorkerModule {
         HeartbeatService,
         LedgerSweep,
         SendLoop,
+        UsageLoop,
         WebhookLoop,
       ],
     };

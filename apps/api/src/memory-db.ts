@@ -230,6 +230,25 @@ interface AuditRow {
   createdAt: Date;
 }
 
+interface BillingProfileRow {
+  organizationId: string;
+  email: string | null;
+  name: string | null;
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  region: string | null;
+  postalCode: string | null;
+  countryIso2: string | null;
+  lowBalanceMicros: bigint | null;
+  lowBalanceNotifiedAt: Date | null;
+  autoRechargeEnabled: boolean;
+  autoRechargeThresholdMicros: bigint | null;
+  autoRechargeAmountMicros: bigint | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 type Where = Record<string, unknown>;
 
 function matches(row: object, where: Where): boolean {
@@ -397,6 +416,7 @@ export function createMemoryDb() {
   const templates = new Map<string, TemplateRow>();
   const messages = new Map<string, MessageRow>();
   const messageEvents: MessageEventRow[] = [];
+  const billingProfiles = new Map<string, BillingProfileRow>();
   const countries = new Map<string, CountryRow>();
   const messaging = createMessagingMemory();
 
@@ -1093,7 +1113,10 @@ export function createMemoryDb() {
     country: {
       findUnique: ({ where }: { where: { iso2: string } }) =>
         Promise.resolve(countries.get(where.iso2) ?? null),
-      findMany: ({ where, orderBy }: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'> }) =>
+      findMany: ({
+        where,
+        orderBy,
+      }: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'> } = {}) =>
         Promise.resolve(
           byOrder(
             [...countries.values()].filter((row) => matches(row, where ?? {})),
@@ -1155,6 +1178,49 @@ export function createMemoryDb() {
           rows.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
         }
         return Promise.resolve(rows.slice(skip ?? 0, (skip ?? 0) + (take ?? rows.length)));
+      },
+    },
+    billingProfile: {
+      findUnique: ({ where }: { where: { organizationId: string } }) =>
+        Promise.resolve(billingProfiles.get(where.organizationId) ?? null),
+      findMany: () => Promise.resolve([...billingProfiles.values()]),
+      upsert: ({
+        where,
+        create,
+        update,
+      }: {
+        where: { organizationId: string };
+        create: BillingProfileRow;
+        update: Partial<BillingProfileRow>;
+      }) => {
+        const existing = billingProfiles.get(where.organizationId);
+        if (existing !== undefined) {
+          Object.assign(existing, update, { updatedAt: new Date() });
+          return Promise.resolve(existing);
+        }
+        const now = new Date();
+        const row: BillingProfileRow = {
+          ...create,
+          createdAt: now,
+          updatedAt: now,
+          lowBalanceNotifiedAt: create.lowBalanceNotifiedAt ?? null,
+        };
+        billingProfiles.set(row.organizationId, row);
+        return Promise.resolve(row);
+      },
+      update: ({
+        where,
+        data,
+      }: {
+        where: { organizationId: string };
+        data: Partial<BillingProfileRow>;
+      }) => {
+        const existing = billingProfiles.get(where.organizationId);
+        if (existing === undefined) {
+          throw new Error(`missing billing profile ${where.organizationId}`);
+        }
+        Object.assign(existing, data, { updatedAt: new Date() });
+        return Promise.resolve(existing);
       },
     },
     ...messaging.delegates,
@@ -1508,6 +1574,8 @@ function createMessagingMemory() {
         },
       },
       ledgerEntry: {
+        count: ({ where }: { where?: Where }) =>
+          Promise.resolve(ledger.filter((row) => matches(row, where ?? {})).length),
         findMany: (args?: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'> }) =>
           Promise.resolve(listed(ledger, args)),
         findFirst: ({ where }: { where: Where }) =>

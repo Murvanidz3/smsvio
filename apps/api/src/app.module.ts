@@ -3,6 +3,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
 import { createLoggerModule, PrismaModule, RedisModule } from '@smsvio/server';
 
 import { AccountsModule } from './accounts/accounts.module.js';
+import { BillingModule } from './billing/billing.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { DeveloperModule } from './developer/developer.module.js';
 import { MessagingModule } from './messaging/messaging.module.js';
@@ -42,6 +43,7 @@ export class AppModule {
         }),
         RedisModule.forRoot({ url: env.REDIS_URL, connectionName: 'smsvio-api' }),
         AccountsModule,
+        BillingModule,
         CatalogModule,
         MessagingModule,
         DeveloperModule,

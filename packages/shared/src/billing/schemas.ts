@@ -123,6 +123,48 @@ export const addCountrySchema = z.object({
   senderId: z.uuid().nullable(),
 });
 
+const optionalText = (max: number) => z.string().trim().max(max).nullable().optional();
+
+export const overviewQuerySchema = z.object({
+  range: z.enum(['today', '7', '30', '90', 'custom']).default('7'),
+  from: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  to: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+});
+
+export const billingHistoryQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  pageSize: pageSizeSchema.default(25),
+});
+
+export const billingPreferencesSchema = z.object({
+  email: z.union([z.string().trim().max(254), z.null()]).optional(),
+  name: optionalText(120),
+  line1: optionalText(120),
+  line2: optionalText(120),
+  city: optionalText(80),
+  region: optionalText(80),
+  postalCode: optionalText(20),
+  countryIso2: z
+    .string()
+    .regex(/^[A-Z]{2}$/)
+    .nullable()
+    .optional(),
+  lowBalance: z.string().trim().max(20).nullable().optional(),
+  autoRechargeEnabled: z.boolean().optional(),
+  autoRechargeThreshold: z.string().trim().max(20).nullable().optional(),
+  autoRechargeAmount: z.string().trim().max(20).nullable().optional(),
+});
+
+export const topUpSchema = z.object({
+  amount: z.string().trim().min(1).max(20),
+});
+
 export const requestSenderSchema = z.object({
   type: z.enum(['ALPHANUMERIC', 'LONG_CODE', 'SHORT_CODE']),
   value: z.string().trim().min(1).max(15),

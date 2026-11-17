@@ -30,6 +30,24 @@ export type { PriceSource, PricedRate, RouteCandidate } from './pricing.js';
 export { LEDGER_TYPES, ledgerDifferences } from './ledger.js';
 export type { BalanceSnapshot, LedgerDifference, LedgerSnapshot, LedgerType } from './ledger.js';
 export { parseRateCsv } from './rates-csv.js';
+export {
+  MIN_TOP_UP_MICROS,
+  USAGE_REFRESH_MS,
+  autoRechargeAction,
+  deliverability,
+  estimateMonthlyBill,
+  summarizeUsage,
+  usageWindow,
+  utcDay,
+} from './usage.js';
+export type {
+  EstimateDestination,
+  EstimateLine,
+  OverviewRange,
+  RechargeProfile,
+  UsageDay,
+  UsageMessage,
+} from './usage.js';
 export type { RateCsvError, RateCsvResult, RateCsvRow } from './rates-csv.js';
 export {
   addCountrySchema,
@@ -44,7 +62,11 @@ export {
   platformSpendCapSchema,
   rateImportSchema,
   requestSenderSchema,
+  billingHistoryQuerySchema,
+  billingPreferencesSchema,
+  overviewQuerySchema,
   spendCapSchema,
+  topUpSchema,
   updateProviderSchema,
   updateRouteSchema,
 } from './schemas.js';

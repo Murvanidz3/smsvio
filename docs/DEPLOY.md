@@ -356,6 +356,13 @@ authentication again, and existing webhook secrets cannot be revealed or used to
 owner rotates them. Generate a replacement with `openssl rand -hex 32`, update
 `/opt/smsvio/.env`, and recreate the api and the worker.
 
+**Payments**
+
+Phase 5 adds no payment-provider variables. `POST /api/internal/billing/top-ups` returns 503
+`payments_unconfigured` and does not credit a balance. Auto-recharge settings are stored and
+are not charged. Low-balance email uses `EMAIL_MODE` and the SMTP settings the worker already
+has. The migrate job creates `billing_profiles` and `daily_usage` on the next deploy.
+
 **CI deploy key**: generate a new key pair (section 1.2). Give the public key the comment
 `smsvio-github-actions`, append it to `/home/deploy/.ssh/authorized_keys`, then run
 `install-ssh-guard.sh` so the new line is forced through the guard. Update the `VPS_SSH_KEY`

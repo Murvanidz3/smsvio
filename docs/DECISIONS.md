@@ -444,3 +444,37 @@ and cards inverted. SMSVIO keeps its own name, mark, and wording.
   `GET /api/v1/openapi.json` does not require a key.
 - `AUTO_APPROVE_TEMPLATES` stays `false` in the repository. Production `/opt/smsvio/.env` still
   sets it to `true` until the review queue in Phase 6.
+
+## Phase 5 — Billing and analytics (2026-11-17)
+
+- No payment provider was named, and section 16 forbids inventing one or its keys. Checkout
+  validates the amount (minimum 10 USD) and then returns 503 `payments_unconfigured`. It writes
+  no ledger row and stores no card data. The payment-methods tab says there is no hosted page
+  to open. A provider adapter can be added later without a new environment variable until the
+  owner supplies keys. Production deploy does not need a new secret.
+- Auto-recharge settings are stored on `BillingProfile`. The API reports `idle` or
+  `below_threshold`. Nothing is charged, and the worker does not debit a saved card.
+- A card top-up, once a provider exists, is credited only from a verified webhook and is
+  idempotent by `providerRef`. There is still no `billing.topped_up` webhook. A receipt is the
+  ledger download (`text/plain`). Empty notes fall back to the ledger type label.
+- Overview counts the organization's messages when the page opens, so the dashboard is not
+  waiting on the rollup. The worker rewrites the last 90 UTC days into `DailyUsage` every 15
+  minutes with the same `summarizeUsage` function. Accepted messages are sent, delivered,
+  undelivered, and expired. Failed includes failed, rejected, and undelivered. Spend counts
+  `priceMicros` only when the message was accepted, billable, and priced. Test keys stay out
+  of spend. Deliverability is delivered divided by messages with a final status, and is null
+  when none have finished. A custom range is inclusive UTC, at most 90 days, not in the future,
+  and `from` must be on or before `to`.
+- A low-balance email is sent once when available balance is under `lowBalanceMicros`. Recipients
+  are active owners, admins, and billing members, plus `BillingProfile.email` when it is set.
+  Blank addresses are skipped. If the balance returns to the threshold or above,
+  `lowBalanceNotifiedAt` is cleared so the notice can fire again. When `EMAIL_MODE` is not
+  `smtp`, or `SMTP_HOST` or `SMTP_FROM` is missing, the worker logs and still records the notice.
+  A threshold of null or blank turns the notice off.
+- The verification banner links to `/dashboard/settings`. The compliance page is Phase 6, so
+  the banner does not point at a route that does not exist.
+- Template analytics already shipped as the SVG chart on the template page. It was not rebuilt.
+  The pricing calculator is a shared function: whole-percent shares must total 100, and the
+  cost is price times the floored message count times segments. The rates CSV is built in the
+  browser from the JSON quote list.
+- `AUTO_APPROVE_TEMPLATES` is unchanged.

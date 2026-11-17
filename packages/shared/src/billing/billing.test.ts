@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { ledgerDifferences } from './ledger.js';
 import {
+  autoRechargeAction,
+  deliverability,
+  estimateMonthlyBill,
+  summarizeUsage,
+  usageWindow,
+} from './usage.js';
+import {
   DEFAULT_DAILY_SPEND_CAP_MICROS,
   effectiveDailySpendCap,
   effectiveMarkup,
@@ -304,5 +311,162 @@ describe('billing schemas', () => {
         countries: [],
       }).success,
     ).toBe(false);
+  });
+});
+
+function windowError(result: { error: string } | { start: Date; days: number }): string {
+  if (!('error' in result)) {
+    throw new Error('expected a range error');
+  }
+  return result.error;
+}
+
+function billError(result: { error: string } | { lines: unknown; totalMicros: bigint }): string {
+  if (!('error' in result)) {
+    throw new Error('expected an estimate error');
+  }
+  return result.error;
+}
+
+describe('usage and estimates', () => {
+  const now = new Date('2026-11-17T15:00:00.000Z');
+
+  it('counts accepted, delivered, failed, and billable spend by UTC day', () => {
+    const days = summarizeUsage(
+      [
+        { createdAt: now, status: 'DELIVERED', priceMicros: 15_000n, billable: true },
+        { createdAt: now, status: 'FAILED', priceMicros: 15_000n, billable: true },
+        { createdAt: now, status: 'SENT', priceMicros: 15_000n, billable: false },
+        { createdAt: now, status: 'QUEUED', priceMicros: 15_000n, billable: true },
+        {
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          status: 'SENT',
+          priceMicros: 1n,
+          billable: true,
+        },
+      ],
+      new Date('2026-11-17T00:00:00.000Z'),
+      1,
+    );
+    expect(days).toEqual([
+      {
+        day: '2026-11-17',
+        sent: 2,
+        delivered: 1,
+        failed: 1,
+        finalCount: 2,
+        spendMicros: 15_000n,
+      },
+    ]);
+    expect(deliverability(days)).toBe(0.5);
+    const first = days[0];
+    if (first === undefined) {
+      throw new Error('missing day');
+    }
+    expect(deliverability([{ ...first, finalCount: 0, delivered: 0 }])).toBeNull();
+  });
+
+  it('rejects a custom range that is missing, reversed, future, or longer than 90 days', () => {
+    const week = usageWindow('7', now);
+    if ('error' in week) {
+      throw new Error(week.error);
+    }
+    expect(week.days).toBe(7);
+    expect(windowError(usageWindow('custom', now))).toBe('Choose a start and end date.');
+    expect(windowError(usageWindow('custom', now, '2026-11-18', '2026-11-17'))).toMatch(/before/);
+    expect(windowError(usageWindow('custom', now, '2026-11-17', '2026-11-18'))).toMatch(/future/);
+    expect(windowError(usageWindow('custom', now, '2026-13-40', '2026-11-17'))).toMatch(
+      /YYYY-MM-DD/,
+    );
+    expect(windowError(usageWindow('custom', now, '2026-01-01', '2026-11-17'))).toMatch(/90/);
+    expect(usageWindow('custom', now, '2026-11-10', '2026-11-17')).toEqual({
+      start: new Date('2026-11-10T00:00:00.000Z'),
+      days: 8,
+    });
+  });
+
+  it('estimates a bill only when shares total 100 percent', () => {
+    expect(
+      estimateMonthlyBill({
+        monthlyMessages: 1000,
+        segments: 2,
+        destinations: [
+          { country: 'DE', sharePercent: 25, priceMicros: 10_000n },
+          { country: 'US', sharePercent: 75, priceMicros: 20_000n },
+        ],
+      }),
+    ).toEqual({
+      lines: [
+        { country: 'DE', messages: 250, segments: 2, priceMicros: 10_000n, costMicros: 5_000_000n },
+        {
+          country: 'US',
+          messages: 750,
+          segments: 2,
+          priceMicros: 20_000n,
+          costMicros: 30_000_000n,
+        },
+      ],
+      totalMicros: 35_000_000n,
+    });
+    expect(
+      billError(estimateMonthlyBill({ monthlyMessages: -1, segments: 1, destinations: [] })),
+    ).toMatch(/message count/);
+    expect(
+      billError(estimateMonthlyBill({ monthlyMessages: 10, segments: 0, destinations: [] })),
+    ).toMatch(/segments/);
+    expect(
+      billError(estimateMonthlyBill({ monthlyMessages: 10, segments: 1, destinations: [] })),
+    ).toMatch(/destination/);
+    expect(
+      billError(
+        estimateMonthlyBill({
+          monthlyMessages: 10,
+          segments: 1,
+          destinations: [{ country: 'DE', sharePercent: 40, priceMicros: 1n }],
+        }),
+      ),
+    ).toMatch(/100%/);
+    expect(
+      billError(
+        estimateMonthlyBill({
+          monthlyMessages: 10,
+          segments: 1,
+          destinations: [{ country: 'DE', sharePercent: 1.5, priceMicros: 1n }],
+        }),
+      ),
+    ).toMatch(/whole percent/);
+  });
+
+  it('reports when auto-recharge is below its threshold and does not charge', () => {
+    expect(
+      autoRechargeAction(
+        {
+          autoRechargeEnabled: true,
+          autoRechargeThresholdMicros: 5_000_000n,
+          autoRechargeAmountMicros: 10_000_000n,
+        },
+        1n,
+      ),
+    ).toBe('below_threshold');
+    expect(
+      autoRechargeAction(
+        {
+          autoRechargeEnabled: false,
+          autoRechargeThresholdMicros: 5n,
+          autoRechargeAmountMicros: 10n,
+        },
+        0n,
+      ),
+    ).toBe('idle');
+    expect(
+      autoRechargeAction(
+        {
+          autoRechargeEnabled: true,
+          autoRechargeThresholdMicros: null,
+          autoRechargeAmountMicros: 10n,
+        },
+        0n,
+      ),
+    ).toBe('idle');
   });
 });
