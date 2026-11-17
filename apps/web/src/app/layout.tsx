@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Plus_Jakarta_Sans } from 'next/font/google';
+import { JetBrains_Mono, Outfit } from 'next/font/google';
 import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 
@@ -8,9 +8,15 @@ import { ThemeProvider } from '@/components/theme-provider';
 
 import './globals.css';
 
-const jakarta = Plus_Jakarta_Sans({
+const outfit = Outfit({
   subsets: ['latin'],
-  variable: '--font-jakarta',
+  variable: '--font-outfit',
+  display: 'swap',
+});
+
+const jetbrains = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains',
   display: 'swap',
 });
 
@@ -25,8 +31,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f8fafb' },
-    { media: '(prefers-color-scheme: dark)', color: '#0b1220' },
+    { media: '(prefers-color-scheme: light)', color: '#dde3ec' },
+    { media: '(prefers-color-scheme: dark)', color: '#121820' },
   ],
 };
 
@@ -34,7 +40,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   return (
-    <html lang="en" className={jakarta.variable} suppressHydrationWarning>
+    <html lang="en" className={`${outfit.variable} ${jetbrains.variable}`} suppressHydrationWarning>
       <body className="min-h-dvh">
         <ThemeProvider nonce={nonce}>
           <Providers>{children}</Providers>

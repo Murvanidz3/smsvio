@@ -2,40 +2,53 @@
 
 import { roleAllows, type SessionResponse } from '@smsvio/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Menu, Search } from 'lucide-react';
+import {
+  AtSign,
+  Contact,
+  FileText,
+  LayoutDashboard,
+  Menu,
+  MessagesSquare,
+  ScanSearch,
+  Search,
+  Send,
+  Settings,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { type ReactNode, useEffect, useState, useSyncExternalStore } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 
 import { Logo } from '@/components/brand/logo';
+import { RailLink } from '@/components/shell/rail';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { accountApi, ApiError } from '@/lib/api';
 
-function subscribeSidebar(onChange: () => void): () => void {
-  window.addEventListener('smsvio-sidebar', onChange);
-  return () => {
-    window.removeEventListener('smsvio-sidebar', onChange);
-  };
-}
-
-function readSidebarCollapsed(): boolean {
-  return window.localStorage.getItem('smsvio.sidebar') === 'collapsed';
-}
-
-const NAV = [
-  { href: '/dashboard', label: 'Overview', group: 'Main' },
-  { href: '/dashboard/templates', label: 'Templates', group: 'Main' },
-  { href: '/dashboard/send', label: 'Send', group: 'Main' },
-  { href: '/dashboard/contacts', label: 'Contacts', group: 'Main' },
-  { href: '/dashboard/messages', label: 'Messages', group: 'Development' },
-  { href: '/dashboard/senders', label: 'Senders', group: 'Main' },
-  { href: '/dashboard/users', label: 'Users', group: 'Account' },
-  { href: '/dashboard/settings', label: 'Settings', group: 'Account' },
-  { href: '/dashboard/tools/number-lookup', label: 'Number lookup', group: 'Tools' },
-] as const;
-
 const GROUPS = ['Main', 'Development', 'Account', 'Tools'] as const;
+
+const NAV: readonly {
+  href: string;
+  label: string;
+  group: (typeof GROUPS)[number];
+  icon: LucideIcon;
+}[] = [
+  { href: '/dashboard', label: 'Overview', group: 'Main', icon: LayoutDashboard },
+  { href: '/dashboard/templates', label: 'Templates', group: 'Main', icon: FileText },
+  { href: '/dashboard/send', label: 'Send', group: 'Main', icon: Send },
+  { href: '/dashboard/contacts', label: 'Contacts', group: 'Main', icon: Contact },
+  { href: '/dashboard/messages', label: 'Messages', group: 'Development', icon: MessagesSquare },
+  { href: '/dashboard/senders', label: 'Senders', group: 'Main', icon: AtSign },
+  { href: '/dashboard/users', label: 'Users', group: 'Account', icon: Users },
+  { href: '/dashboard/settings', label: 'Settings', group: 'Account', icon: Settings },
+  {
+    href: '/dashboard/tools/number-lookup',
+    label: 'Number lookup',
+    group: 'Tools',
+    icon: ScanSearch,
+  },
+];
 
 function isCurrent(pathname: string, href: string): boolean {
   if (href === '/dashboard') {
@@ -51,7 +64,18 @@ export function Shell({ children }: { children: ReactNode }) {
   const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
   const [menuOpen, setMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const collapsed = useSyncExternalStore(subscribeSidebar, readSidebarCollapsed, () => false);
+  const [clock, setClock] = useState('');
+
+  useEffect(() => {
+    const tick = () => {
+      setClock(new Date().toLocaleTimeString('en-GB', { hour12: false }));
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => {
+      window.clearInterval(id);
+    };
+  }, []);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -80,35 +104,14 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   const data = session.data;
-  const crumb =
-    NAV.filter((item) => isCurrent(pathname, item.href)).sort(
-      (left, right) => right.href.length - left.href.length,
-    )[0]?.label ?? 'Dashboard';
 
   return (
-    <div className="flex min-h-dvh">
-      <aside
-        className={`${collapsed ? 'md:w-16' : 'md:w-60'} border-sidebar-border bg-sidebar text-sidebar-foreground hidden shrink-0 border-r md:flex md:flex-col`}
-      >
-        <div className="flex h-16 items-center px-4">
-          <Link href="/dashboard" aria-label="SMSVIO home">
-            <Logo className={collapsed ? '[&_span:last-child]:hidden' : undefined} />
-          </Link>
-        </div>
+    <div className="bg-background flex min-h-dvh">
+      <aside className="border-sidebar-border bg-sidebar text-sidebar-foreground hidden w-[68px] shrink-0 flex-col items-center gap-1 border-r px-2.5 py-4 md:flex">
         <Nav pathname={pathname} />
-        <button
-          type="button"
-          className="text-muted-foreground hover:text-foreground m-3 rounded-md px-2 py-1 text-left text-xs"
-          onClick={() => {
-            window.localStorage.setItem('smsvio.sidebar', collapsed ? 'open' : 'collapsed');
-            window.dispatchEvent(new Event('smsvio-sidebar'));
-          }}
-        >
-          {collapsed ? '»' : 'Collapse'}
-        </button>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center gap-3 border-b px-4">
+        <header className="flex h-16 items-center gap-3 px-4 sm:px-7">
           <Button
             type="button"
             variant="ghost"
@@ -121,12 +124,17 @@ export function Shell({ children }: { children: ReactNode }) {
           >
             <Menu aria-hidden />
           </Button>
-          <p className="text-sm font-medium">{crumb}</p>
+          <Link href="/dashboard" aria-label="SMSVIO home">
+            <Logo />
+          </Link>
           <div className="ml-auto flex items-center gap-2">
+            <span className="text-muted-foreground hidden font-medium tabular-nums sm:inline">
+              {clock}
+            </span>
             <Button
               type="button"
               variant="outline"
-              className="h-8"
+              className="h-[38px] rounded-[9px] px-3 shadow-sm"
               aria-label="Search"
               onClick={() => {
                 setPaletteOpen(true);
@@ -150,7 +158,12 @@ export function Shell({ children }: { children: ReactNode }) {
               </Link>
             ) : null}
             <ThemeToggle />
-            <Button type="button" variant="ghost" onClick={() => void signOut()}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-[38px] rounded-[9px] px-3 shadow-sm"
+              onClick={() => void signOut()}
+            >
               Sign out
             </Button>
           </div>
@@ -166,7 +179,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </Link>
           </p>
         ) : null}
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6">
+        <main className="min-w-0 flex-1 px-4 pt-1 pb-6 sm:px-7">
           {session.isPending ? <p className="text-muted-foreground text-sm">Loading…</p> : children}
         </main>
       </div>
@@ -192,7 +205,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 setMenuOpen(false);
               }}
             >
-              <Nav pathname={pathname} />
+              <Nav pathname={pathname} showLabels />
             </div>
           </div>
         </div>
@@ -208,31 +221,56 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function Nav({ pathname }: { pathname: string }) {
+function Nav({ pathname, showLabels = false }: { pathname: string; showLabels?: boolean }) {
   return (
-    <nav className="grid gap-4 px-3" aria-label="Dashboard">
-      {GROUPS.map((group) => (
-        <div key={group} className="grid gap-1">
-          <p className="text-muted-foreground px-3 text-xs font-semibold tracking-wide">{group}</p>
+    <nav
+      className={showLabels ? 'grid gap-4' : 'grid justify-items-center gap-2'}
+      aria-label="Dashboard"
+    >
+      {GROUPS.map((group, index) => (
+        <div key={group} className={showLabels ? 'grid gap-1' : 'grid justify-items-center gap-1'}>
+          {showLabels ? (
+            <p className="text-muted-foreground px-3 text-xs font-semibold tracking-wide">
+              {group}
+            </p>
+          ) : index > 0 ? (
+            <span className="bg-sidebar-border my-1 h-px w-6" />
+          ) : null}
           {NAV.filter((item) => item.group === group).map((item) => (
-            <Link
+            <RailLink
               key={item.href}
               href={item.href}
-              aria-current={isCurrent(pathname, item.href) ? 'page' : undefined}
-              className={`rounded-lg px-3 py-2 text-sm font-medium ${isCurrent(pathname, item.href) ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'hover:bg-sidebar-accent'}`}
-            >
-              {item.label}
-            </Link>
+              label={item.label}
+              icon={item.icon}
+              showLabel={showLabels}
+              current={isCurrent(pathname, item.href)}
+            />
           ))}
         </div>
       ))}
-      <div className="grid gap-1">
-        <p className="text-muted-foreground px-3 text-xs font-semibold tracking-wide">Help</p>
+      <div className={showLabels ? 'grid gap-1' : 'grid justify-items-center gap-1'}>
+        {showLabels ? (
+          <p className="text-muted-foreground px-3 text-xs font-semibold tracking-wide">Help</p>
+        ) : (
+          <span className="bg-sidebar-border mb-1 h-px w-6" />
+        )}
         <a
-          className="hover:bg-sidebar-accent rounded-lg px-3 py-2 text-sm font-medium"
+          className={
+            showLabels
+              ? 'hover:bg-sidebar-accent rounded-[10px] px-3 py-2 text-sm font-medium'
+              : 'hover:bg-sidebar-accent grid size-11 place-items-center rounded-[10px]'
+          }
           href="mailto:support@smsvio.com"
+          title="Support"
         >
-          Support
+          {showLabels ? (
+            'Support'
+          ) : (
+            <>
+              <span className="sr-only">Support</span>
+              <span aria-hidden>?</span>
+            </>
+          )}
         </a>
       </div>
     </nav>

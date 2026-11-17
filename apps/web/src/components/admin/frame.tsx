@@ -1,23 +1,31 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { BadgeDollarSign, Building2, Menu, Route, Server } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { Logo } from '@/components/brand/logo';
+import { RailLink } from '@/components/shell/rail';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { Button } from '@/components/ui/button';
 import { accountApi } from '@/lib/api';
 
 const LINKS = [
-  { href: '/admin', label: 'Organizations' },
-  { href: '/admin/providers', label: 'Providers' },
-  { href: '/admin/routes', label: 'Routes' },
-  { href: '/admin/rates', label: 'Rates' },
+  { href: '/admin', label: 'Organizations', icon: Building2 },
+  { href: '/admin/providers', label: 'Providers', icon: Server },
+  { href: '/admin/routes', label: 'Routes', icon: Route },
+  { href: '/admin/rates', label: 'Rates', icon: BadgeDollarSign },
 ] as const;
+
+function current(pathname: string, href: string): boolean {
+  return href === '/admin' ? pathname === '/admin' : pathname.startsWith(href);
+}
 
 export function AdminFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
   const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
   if (session.data !== undefined && !session.data.user.isPlatformAdmin) {
     return (
@@ -27,35 +35,95 @@ export function AdminFrame({ children }: { children: ReactNode }) {
     );
   }
   return (
-    <div className="min-h-dvh">
-      <header className="flex flex-wrap items-center gap-4 border-b px-4 py-3">
-        <Link href="/dashboard" aria-label="SMSVIO home">
-          <Logo />
-        </Link>
-        <nav className="flex flex-wrap gap-1" aria-label="Admin">
-          {LINKS.map((link) => {
-            const current =
-              link.href === '/admin' ? pathname === '/admin' : pathname.startsWith(link.href);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                aria-current={current ? 'page' : undefined}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium ${current ? 'bg-accent' : 'hover:bg-muted'}`}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
+    <div className="bg-background flex min-h-dvh">
+      <aside className="border-sidebar-border bg-sidebar hidden w-[68px] shrink-0 flex-col items-center gap-1 border-r px-2.5 py-4 md:flex">
+        <nav className="grid justify-items-center gap-1" aria-label="Admin">
+          {LINKS.map((link) => (
+            <RailLink
+              key={link.href}
+              href={link.href}
+              label={link.label}
+              icon={link.icon}
+              current={current(pathname, link.href)}
+            />
+          ))}
         </nav>
-        <div className="ml-auto flex items-center gap-3">
-          <Link href="/dashboard" className="text-sm font-medium">
-            Dashboard
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-16 items-center gap-3 px-4 sm:px-7">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="md:hidden"
+            aria-label="Open menu"
+            onClick={() => {
+              setMenuOpen(true);
+            }}
+          >
+            <Menu aria-hidden />
+          </Button>
+          <Link href="/dashboard" aria-label="SMSVIO home">
+            <Logo />
           </Link>
-          <ThemeToggle />
+          <div className="ml-auto flex items-center gap-3">
+            <Link href="/dashboard" className="text-sm font-semibold">
+              Dashboard
+            </Link>
+            <ThemeToggle />
+          </div>
+        </header>
+        <nav className="flex gap-1 overflow-x-auto px-4 pb-3 md:hidden" aria-label="Admin">
+          {LINKS.map((link) => (
+            <RailLink
+              key={link.href}
+              href={link.href}
+              label={link.label}
+              icon={link.icon}
+              showLabel
+              current={current(pathname, link.href)}
+            />
+          ))}
+        </nav>
+        <main className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-2 sm:px-7">{children}</main>
+      </div>
+      {menuOpen ? (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={() => {
+            setMenuOpen(false);
+          }}
+        >
+          <div
+            className="bg-sidebar text-sidebar-foreground h-full w-72 p-4"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+            role="dialog"
+            aria-label="Menu"
+          >
+            <Logo />
+            <nav
+              className="mt-6 grid gap-1"
+              aria-label="Admin"
+              onClick={() => {
+                setMenuOpen(false);
+              }}
+            >
+              {LINKS.map((link) => (
+                <RailLink
+                  key={link.href}
+                  href={link.href}
+                  label={link.label}
+                  icon={link.icon}
+                  showLabel
+                  current={current(pathname, link.href)}
+                />
+              ))}
+            </nav>
+          </div>
         </div>
-      </header>
-      <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6">{children}</main>
+      ) : null}
     </div>
   );
 }

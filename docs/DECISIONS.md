@@ -375,3 +375,16 @@ to `main` and must pass there. The deploy job does not start unless all three su
   against production. [Load test run 43228126966](https://github.com/Murvanidz3/smsvio/actions/runs/43228126966)
   on `e418d00` accepted 60,000 messages, rejected 0, and measured 0 lost messages, 0 double charges,
   and 0 ledger-versus-balance differences.
+
+## Visual system — operator console reference (2026-11-17)
+
+The owner asked SMSVIO to follow the layout, type, and slate surfaces of their other
+operator console at `https://smsorca.com/root`, in a dark variant. The measured light
+tokens are the light theme. The dark theme is the same structure with the canvas, rail,
+and cards inverted. SMSVIO keeps its own name, mark, and wording.
+
+- Type: Outfit for the interface, JetBrains Mono for identifiers.
+- Chrome: a 68px icon rail, a top bar with the wordmark and clock, 18px cards, 9px buttons.
+- Pages and actions stay the ones SMSVIO already has. SMPP desks, short links, stuck
+  delivery receipts, and the other operator tools on that site are not copied as empty
+  screens. They need their own backend before they appear here.
