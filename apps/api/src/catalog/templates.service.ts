@@ -1,16 +1,18 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { PrismaClient } from '@smsvio/db';
 import {
   TEMPLATE_GALLERY,
   checkTemplate,
   gallerySample,
+  isWebhookEvent,
   nameFromBody,
   smsErrorMessage,
   templateVariables,
   type TemplateCategory,
   type TemplateStatus,
 } from '@smsvio/shared';
-import { PRISMA } from '@smsvio/server';
+import { PRISMA, REDIS, publishCustomerEvent } from '@smsvio/server';
+import type { Redis } from 'ioredis';
 
 import type { AuthState } from '../accounts/support.js';
 import { assertCapability, writeAudit } from '../accounts/support.js';
@@ -45,6 +47,7 @@ export class TemplateService {
   constructor(
     @Inject(PRISMA) private readonly prisma: PrismaClient,
     @Inject(API_ENV) private readonly env: ApiEnv,
+    @Optional() @Inject(REDIS) private readonly redis?: Redis,
   ) {}
 
   gallery(state: AuthState) {
@@ -150,6 +153,13 @@ export class TemplateService {
       data: { status, rejectionReason: null },
     });
     await this.audit(state, client, 'template.submitted', template.id, { status });
+    if (template.status === 'APPROVED') {
+      await publishCustomerEvent(this.prisma, this.redis, {
+        organizationId: state.organizationId,
+        type: 'template.approved',
+        data: { id: template.id, name: template.name, status: template.status },
+      });
+    }
     return presentTemplate(template);
   }
 
@@ -221,6 +231,13 @@ export class TemplateService {
       ip: client.ip,
       meta,
     });
+    if (isWebhookEvent(action)) {
+      await publishCustomerEvent(this.prisma, this.redis, {
+        organizationId: state.organizationId,
+        type: action,
+        data: { id: targetId, ...(meta ?? {}) },
+      });
+    }
   }
 }
 

@@ -391,3 +391,56 @@ and cards inverted. SMSVIO keeps its own name, mark, and wording.
 - Pages and actions stay the ones SMSVIO already has. SMPP desks, short links, stuck
   delivery receipts, and the other operator tools on that site are not copied as empty
   screens. They need their own backend before they appear here.
+
+## Phase 4 — API keys, public API, and webhooks (2026-11-17)
+
+- Webhook delivery uses Redis lists and a sorted set (`smsvio:q:webhook.deliver` and
+  `smsvio:q:webhook.deliver:delay`). BullMQ is not a dependency. Dispatch still sends only
+  through `MOCK` providers whose status is `ACTIVE`.
+- An API key is `svk_live_` or `svk_test_` plus 32 random bytes. The database stores the
+  SHA-256 hash, the first 16 characters, and the last 4. The full secret is returned once, on
+  create. A test key stores the quoted price and sets `Message.billable` to false, so the
+  accept response and the message log show the quote while the hold, the ledger, and the daily
+  spend cap are skipped. Test sends still count toward the organization send ceiling and the
+  50 requests per second limit on that key. Deleting a key sets `Message.apiKeyId` null and
+  does not change `billable` on messages already accepted.
+- A key acts as its organization with the synthetic role `DEVELOPER`. It keeps working if the
+  creator's membership later changes. `x-api-key` is preferred over `Authorization: Bearer`.
+  A malformed key is rejected before a database read. A well-formed key is compared in constant
+  time with the stored hash, or with a dummy hash when no row exists. An unknown key and a
+  disabled key both return 401 with "That API key is not valid." `lastUsedAt` is updated at
+  most once a minute. A rejected public key does not clear the dashboard session cookies.
+- Public JSON is snake_case. The dashboard stays camelCase. List endpoints use a cursor of
+  `createdAt` then `id`, default 25 rows and at most 100. `GET /api/v1/rates` returns the full
+  enabled-country quote list. Number lookup uses the existing 30 per minute limit, keyed by the
+  API key, in addition to the 50 per second key limit.
+- `Idempotency-Key` and `client_ref` share one slot. When both are present they must be equal,
+  otherwise the request is 400. A missing `client_ref` is filled from the header. A batch-level
+  key is cached in Redis for 24 hours under `smsvio:idem:batch:<org>:<sha256>`. The batch
+  response is HTTP 200 with one result per item. One HTTP request is one API-key rate hit, and
+  each message still uses the organization send ceiling. `scheduled_at` may be up to 30 seconds
+  in the past and at most 7 days ahead. A future send is placed on `smsvio:q:sms.send:delay`.
+- Webhook secrets use the Standard Webhooks `whsec_` form and are encrypted with the existing
+  `APP_ENCRYPTION_KEY`, so they can be revealed and used to sign. Rotate replaces the secret
+  immediately. Replay creates a new webhook id and adds `replayed_from`. `webhook.test` is
+  delivered even though it is not a subscription event. Public reads never return the secret.
+  The delivery log stays on the dashboard.
+- Subscribable message events are `message.queued`, `.sent`, `.delivered`, `.undelivered`,
+  `.failed`, `.expired`, and `.received`. `message.received` is not emitted until inbound
+  messages exist in Phase 6. `message.sending` is not an event. Contact import emits one
+  `contact.imported` event. Template events carry id, name, and status. There are no top-up
+  events and no events for API keys.
+- A delivery is attempted immediately, then on delays of 10s, 30s, 2m, 10m, 30m, 1h, 2h, 4h,
+  8h, and 8h. The endpoint is disabled when that schedule is exhausted, not after a short burst.
+  Success resets `consecutiveFailures`. Owners and admins are emailed only when `EMAIL_MODE=smtp`
+  and `SMTP_HOST` and `SMTP_FROM` are set. Otherwise the disable is logged. A mail failure does
+  not turn the endpoint back on. The worker uses the existing encryption key and SMTP settings.
+  No new secret was added.
+- Delivery requires HTTPS, rejects userinfo, allows at most 2048 characters, times out at 10
+  seconds, and does not follow redirects. DNS is resolved and any non-global unicast address,
+  including CGNAT, documentation ranges, and IPv4-mapped IPv6, fails the delivery. The TCP
+  connection is pinned to the first resolved address.
+- `/docs` is a first-party page so it can live under the nonce content security policy.
+  `GET /api/v1/openapi.json` does not require a key.
+- `AUTO_APPROVE_TEMPLATES` stays `false` in the repository. Production `/opt/smsvio/.env` still
+  sets it to `true` until the review queue in Phase 6.

@@ -125,23 +125,26 @@ ls -l .env   # must be -rw------- deploy
 | `SENTRY_ENVIRONMENT` | Environment tag sent to Sentry.                                  |
 | `DATABASE_POOL_MAX`  | Optional, default 10.                                            |
 
-The api refuses to start without `PUBLIC_ORIGIN` and `APP_ENCRYPTION_KEY`. Edit the existing
-`/opt/smsvio/.env` (do not regenerate it) before deploying this release. A missing key makes
-the api exit and `deploy.sh` rolls back to the previous release.
+The api refuses to start without `PUBLIC_ORIGIN` and `APP_ENCRYPTION_KEY`. The worker also
+refuses to start without `APP_ENCRYPTION_KEY`: it decrypts webhook signing secrets with that
+key and, when `EMAIL_MODE=smtp`, uses the SMTP settings in this file to email owners after a
+webhook endpoint is disabled. Edit the existing `/opt/smsvio/.env` (do not regenerate it)
+before deploying this release. A missing key makes the api or the worker exit and `deploy.sh`
+rolls back to the previous release.
 
-| Variable               | Meaning                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
-| `PUBLIC_ORIGIN`        | `https://smsvio.com`. Cookies and links use this exact origin.                              |
-| `APP_ENCRYPTION_KEY`   | `openssl rand -hex 32` (64 hex characters). Encrypts TOTP secrets at rest.                  |
-| `EMAIL_MODE`           | `disabled` (default) or `smtp`. `disabled` boots with no mail server.                       |
-| `GOOGLE_CLIENT_ID`     | Optional. Set together with `GOOGLE_CLIENT_SECRET`, or leave both empty to hide Google.     |
-| `GOOGLE_CLIENT_SECRET` | Optional. Set together with `GOOGLE_CLIENT_ID`.                                             |
-| `SEED_ADMIN_EMAIL`     | Optional. The verified account with this email is the platform admin, however they sign in. |
-| `SMTP_HOST`            | Required only when `EMAIL_MODE=smtp`.                                                       |
-| `SMTP_PORT`            | Default `587`. Port `465` uses implicit TLS.                                                |
-| `SMTP_USER`            | Optional. Set together with `SMTP_PASSWORD`, or leave both empty.                           |
-| `SMTP_PASSWORD`        | Optional. Set together with `SMTP_USER`.                                                    |
-| `SMTP_FROM`            | Required only when `EMAIL_MODE=smtp`. For example `SMSVIO <noreply@smsvio.com>`.            |
+| Variable               | Meaning                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| `PUBLIC_ORIGIN`        | `https://smsvio.com`. Cookies and links use this exact origin.                                         |
+| `APP_ENCRYPTION_KEY`   | `openssl rand -hex 32` (64 hex characters). Encrypts TOTP secrets and webhook signing secrets at rest. |
+| `EMAIL_MODE`           | `disabled` (default) or `smtp`. `disabled` boots with no mail server.                                  |
+| `GOOGLE_CLIENT_ID`     | Optional. Set together with `GOOGLE_CLIENT_SECRET`, or leave both empty to hide Google.                |
+| `GOOGLE_CLIENT_SECRET` | Optional. Set together with `GOOGLE_CLIENT_ID`.                                                        |
+| `SEED_ADMIN_EMAIL`     | Optional. The verified account with this email is the platform admin, however they sign in.            |
+| `SMTP_HOST`            | Required only when `EMAIL_MODE=smtp`.                                                                  |
+| `SMTP_PORT`            | Default `587`. Port `465` uses implicit TLS.                                                           |
+| `SMTP_USER`            | Optional. Set together with `SMTP_PASSWORD`, or leave both empty.                                      |
+| `SMTP_PASSWORD`        | Optional. Set together with `SMTP_USER`.                                                               |
+| `SMTP_FROM`            | Required only when `EMAIL_MODE=smtp`. For example `SMSVIO <noreply@smsvio.com>`.                       |
 
 The browser callback is `/auth/google/callback` on `PUBLIC_ORIGIN`. These are the URIs
 this app sends to Google:
@@ -347,9 +350,11 @@ sed -i "s/^REDIS_PASSWORD=.*/REDIS_PASSWORD=$(openssl rand -hex 32)/" .env
 
 **Application encryption key**
 
-`APP_ENCRYPTION_KEY` encrypts TOTP secrets. Ciphertext is prefixed `v1.`. Replacing the key does
-not re-encrypt existing rows: those users must set up two-factor authentication again. Generate
-a replacement with `openssl rand -hex 32`, update `/opt/smsvio/.env`, and recreate the api.
+`APP_ENCRYPTION_KEY` encrypts TOTP secrets and webhook signing secrets. Ciphertext is prefixed
+`v1.`. Replacing the key does not re-encrypt existing rows: those users must set up two-factor
+authentication again, and existing webhook secrets cannot be revealed or used to sign until an
+owner rotates them. Generate a replacement with `openssl rand -hex 32`, update
+`/opt/smsvio/.env`, and recreate the api and the worker.
 
 **CI deploy key**: generate a new key pair (section 1.2). Give the public key the comment
 `smsvio-github-actions`, append it to `/home/deploy/.ssh/authorized_keys`, then run

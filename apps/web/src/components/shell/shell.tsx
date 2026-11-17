@@ -1,11 +1,18 @@
 'use client';
 
-import { roleAllows, type SessionResponse } from '@smsvio/shared';
+import {
+  roleAllows,
+  type Capability,
+  type MembershipRole,
+  type SessionResponse,
+} from '@smsvio/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AtSign,
+  BookOpen,
   Contact,
   FileText,
+  KeyRound,
   LayoutDashboard,
   Menu,
   MessagesSquare,
@@ -14,6 +21,7 @@ import {
   Send,
   Settings,
   Users,
+  Webhook,
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -34,12 +42,28 @@ const NAV: readonly {
   label: string;
   group: (typeof GROUPS)[number];
   icon: LucideIcon;
+  capability?: Capability;
 }[] = [
   { href: '/dashboard', label: 'Overview', group: 'Main', icon: LayoutDashboard },
   { href: '/dashboard/templates', label: 'Templates', group: 'Main', icon: FileText },
   { href: '/dashboard/send', label: 'Send', group: 'Main', icon: Send },
   { href: '/dashboard/contacts', label: 'Contacts', group: 'Main', icon: Contact },
   { href: '/dashboard/messages', label: 'Messages', group: 'Development', icon: MessagesSquare },
+  {
+    href: '/dashboard/api-keys',
+    label: 'API keys',
+    group: 'Development',
+    icon: KeyRound,
+    capability: 'developer',
+  },
+  {
+    href: '/dashboard/webhooks',
+    label: 'Webhooks',
+    group: 'Development',
+    icon: Webhook,
+    capability: 'developer',
+  },
+  { href: '/docs', label: 'Documentation', group: 'Development', icon: BookOpen },
   { href: '/dashboard/senders', label: 'Senders', group: 'Main', icon: AtSign },
   { href: '/dashboard/users', label: 'Users', group: 'Account', icon: Users },
   { href: '/dashboard/settings', label: 'Settings', group: 'Account', icon: Settings },
@@ -50,6 +74,13 @@ const NAV: readonly {
     icon: ScanSearch,
   },
 ];
+
+function visibleNav(role: MembershipRole | undefined) {
+  return NAV.filter(
+    (item) =>
+      item.capability === undefined || (role !== undefined && roleAllows(role, item.capability)),
+  );
+}
 
 function isCurrent(pathname: string, href: string): boolean {
   if (href === '/dashboard') {
@@ -170,7 +201,7 @@ export function Shell({ children }: { children: ReactNode }) {
         className="vio-side border-sidebar-border bg-sidebar text-sidebar-foreground border-r"
         data-pinned={pinned ? 'true' : 'false'}
       >
-        <Nav pathname={pathname} />
+        <Nav pathname={pathname} role={session.data?.organization?.role} />
         <MenuPin pinned={pinned} onToggle={togglePin} />
       </aside>
       <div className="vio-canvas flex min-w-0 flex-col">
@@ -211,13 +242,14 @@ export function Shell({ children }: { children: ReactNode }) {
                 setMenuOpen(false);
               }}
             >
-              <Nav pathname={pathname} showLabels />
+              <Nav pathname={pathname} role={session.data?.organization?.role} showLabels />
             </div>
           </div>
         </div>
       ) : null}
       {paletteOpen ? (
         <Palette
+          role={session.data?.organization?.role}
           onClose={() => {
             setPaletteOpen(false);
           }}
@@ -227,7 +259,16 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function Nav({ pathname, showLabels = false }: { pathname: string; showLabels?: boolean }) {
+function Nav({
+  pathname,
+  role,
+  showLabels = false,
+}: {
+  pathname: string;
+  role: MembershipRole | undefined;
+  showLabels?: boolean;
+}) {
+  const items = visibleNav(role);
   return (
     <nav
       className={showLabels ? 'grid gap-4' : 'grid min-h-0 flex-1 gap-1 overflow-y-auto'}
@@ -242,16 +283,18 @@ function Nav({ pathname, showLabels = false }: { pathname: string; showLabels?: 
           ) : (
             <p className="vio-group text-muted-foreground">{group}</p>
           )}
-          {NAV.filter((item) => item.group === group).map((item) => (
-            <RailLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              icon={item.icon}
-              showLabel={showLabels}
-              current={isCurrent(pathname, item.href)}
-            />
-          ))}
+          {items
+            .filter((item) => item.group === group)
+            .map((item) => (
+              <RailLink
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                icon={item.icon}
+                showLabel={showLabels}
+                current={isCurrent(pathname, item.href)}
+              />
+            ))}
         </div>
       ))}
       <div className={showLabels ? 'grid gap-1' : 'grid gap-0.5'}>
@@ -306,10 +349,12 @@ function OrgSwitcher({ session }: { session: SessionResponse }) {
   );
 }
 
-function Palette({ onClose }: { onClose: () => void }) {
+function Palette({ role, onClose }: { role: MembershipRole | undefined; onClose: () => void }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const items = NAV.filter((item) => item.label.toLowerCase().includes(query.trim().toLowerCase()));
+  const items = visibleNav(role).filter((item) =>
+    item.label.toLowerCase().includes(query.trim().toLowerCase()),
+  );
 
   return (
     <div
@@ -361,6 +406,12 @@ function Palette({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+}
+
+export function useCanDeveloper(): boolean {
+  const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
+  const role = session.data?.organization?.role;
+  return role !== undefined && roleAllows(role, 'developer');
 }
 
 export function useCanMessage(): boolean {

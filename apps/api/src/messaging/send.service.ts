@@ -4,6 +4,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { PrismaClient } from '@smsvio/db';
 import {
   IDEMPOTENCY_TTL_MS,
+  SEND_DELAY_KEY,
   SEND_QUEUE_KEY,
   analyzeMessage,
   checkSender,
@@ -13,6 +14,7 @@ import {
   templateCanBeSent,
   type SmsErrorCode,
 } from '@smsvio/shared';
+import { publishCustomerEvent } from '@smsvio/server';
 import {
   DEFAULT_DAILY_SPEND_CAP_MICROS,
   PLATFORM_SETTING_ID,
@@ -32,13 +34,21 @@ import { isUniqueViolation, presentMoney } from './present.js';
 import { PricingService } from './pricing.service.js';
 
 interface SendInput {
-  readonly templateId: string;
+  readonly templateId?: string;
+  readonly text?: string;
   readonly variables?: Readonly<Record<string, string>>;
   readonly to?: string;
   readonly country?: string;
   readonly contactId?: string;
   readonly senderId?: string | null;
+  readonly from?: string;
   readonly clientRef?: string;
+  readonly scheduledAt?: Date;
+}
+
+interface SendOptions {
+  readonly apiKeyId?: string;
+  readonly billable?: boolean;
 }
 
 interface Prepared {
@@ -48,7 +58,7 @@ interface Prepared {
   readonly body: string;
   readonly encoding: string;
   readonly segments: number;
-  readonly templateId: string;
+  readonly templateId: string | null;
   readonly variables: Readonly<Record<string, string>>;
   readonly price: bigint;
 }
@@ -68,8 +78,9 @@ export class SendService {
     return presentPrepared(prepared);
   }
 
-  async send(state: AuthState, input: SendInput) {
+  async send(state: AuthState, input: SendInput, options: SendOptions = {}) {
     assertCapability(state, 'messaging');
+    const billable = options.billable !== false;
     const organizationId = state.organizationId;
     if (input.clientRef !== undefined) {
       const prior = await this.prisma.message.findFirst({
@@ -81,10 +92,12 @@ export class SendService {
     }
     const prepared = await this.prepare(state, input);
     await this.takeRateSlot(organizationId);
-    const spent = await this.spentToday(organizationId);
-    const cap = await this.spendCap(organizationId);
-    if (!spendAllowed(spent, prepared.price, cap)) {
-      throw sms('spend_cap_reached');
+    if (billable) {
+      const spent = await this.spentToday(organizationId);
+      const cap = await this.spendCap(organizationId);
+      if (!spendAllowed(spent, prepared.price, cap)) {
+        throw sms('spend_cap_reached');
+      }
     }
     const id = randomUUID();
     const queuedAt = new Date();
@@ -101,40 +114,42 @@ export class SendService {
             await tx.message.update({ where: { id: prior.id }, data: { clientRef: null } });
           }
         }
-        const balanceRow = await tx.orgBalance.findUnique({ where: { organizationId } });
-        if (balanceRow === null) {
-          try {
-            await tx.orgBalance.create({
-              data: { organizationId, availableMicros: 0n, heldMicros: 0n },
-            });
-          } catch (error) {
-            if (!isUniqueViolation(error)) {
-              throw error;
+        if (billable) {
+          const balanceRow = await tx.orgBalance.findUnique({ where: { organizationId } });
+          if (balanceRow === null) {
+            try {
+              await tx.orgBalance.create({
+                data: { organizationId, availableMicros: 0n, heldMicros: 0n },
+              });
+            } catch (error) {
+              if (!isUniqueViolation(error)) {
+                throw error;
+              }
             }
           }
+          const updated = await tx.orgBalance.updateMany({
+            where: { organizationId, availableMicros: { gte: prepared.price } },
+            data: {
+              availableMicros: { decrement: prepared.price },
+              heldMicros: { increment: prepared.price },
+            },
+          });
+          if (updated.count !== 1) {
+            throw sms('insufficient_balance', 402);
+          }
+          const balance = await tx.orgBalance.findUnique({ where: { organizationId } });
+          await tx.ledgerEntry.create({
+            data: {
+              organizationId,
+              type: 'HOLD',
+              amountMicros: -prepared.price,
+              balanceAfterMicros: balance?.availableMicros ?? 0n,
+              refType: 'message',
+              refId: id,
+              note: 'Message queued',
+            },
+          });
         }
-        const updated = await tx.orgBalance.updateMany({
-          where: { organizationId, availableMicros: { gte: prepared.price } },
-          data: {
-            availableMicros: { decrement: prepared.price },
-            heldMicros: { increment: prepared.price },
-          },
-        });
-        if (updated.count !== 1) {
-          throw sms('insufficient_balance', 402);
-        }
-        const balance = await tx.orgBalance.findUnique({ where: { organizationId } });
-        await tx.ledgerEntry.create({
-          data: {
-            organizationId,
-            type: 'HOLD',
-            amountMicros: -prepared.price,
-            balanceAfterMicros: balance?.availableMicros ?? 0n,
-            refType: 'message',
-            refId: id,
-            note: 'Message queued',
-          },
-        });
         await tx.message.create({
           data: {
             id,
@@ -150,8 +165,11 @@ export class SendService {
             countryIso2: prepared.countryIso2,
             status: 'QUEUED',
             priceMicros: prepared.price,
+            billable,
             clientRef: input.clientRef ?? null,
+            apiKeyId: options.apiKeyId ?? null,
             userId: state.userId,
+            scheduledAt: input.scheduledAt ?? null,
             queuedAt,
           },
         });
@@ -170,12 +188,29 @@ export class SendService {
       }
       throw error;
     }
-    await this.redis.lpush(SEND_QUEUE_KEY, id);
+    if (input.scheduledAt !== undefined && input.scheduledAt.getTime() > Date.now()) {
+      await this.redis.zadd(SEND_DELAY_KEY, input.scheduledAt.getTime(), id);
+    } else {
+      await this.redis.lpush(SEND_QUEUE_KEY, id);
+    }
     const stored = await this.prisma.message.findUnique({ where: { id } });
     if (stored === null) {
       throw sms('internal_error', 500);
     }
-    return presentAccepted(stored);
+    const accepted = presentAccepted(stored);
+    await publishCustomerEvent(this.prisma, this.redis, {
+      organizationId,
+      type: 'message.queued',
+      data: {
+        id: stored.id,
+        to: stored.to,
+        from: stored.fromSender,
+        status: stored.status.toLowerCase(),
+        segments: stored.segments,
+        price_micros: (stored.priceMicros ?? 0n).toString(),
+      },
+    });
+    return accepted;
   }
 
   private async prepare(state: AuthState, input: SendInput): Promise<Prepared> {
@@ -207,21 +242,15 @@ export class SendService {
     if (contact !== null) {
       throw sms('recipient_opted_out');
     }
-    const template = await this.prisma.template.findFirst({
-      where: { id: input.templateId, organizationId },
-    });
-    if (template === null || !templateCanBeSent(template.status)) {
-      throw sms('template_not_approved');
-    }
-    const rendered = renderTemplate(template.body, input.variables ?? {});
-    if (!rendered.ok) {
-      throw sms('missing_variable');
-    }
+    const rendered = await this.render(organizationId, input);
     const analysis = analyzeMessage(rendered.text, { smartEncoding: organization.smartEncoding });
     if (analysis.tooLong) {
       throw sms('message_too_long');
     }
-    const sender = await this.sender(organizationId, destination.countryIso2, input.senderId);
+    const sender =
+      input.from === undefined
+        ? await this.sender(organizationId, destination.countryIso2, input.senderId)
+        : await this.senderValue(organizationId, destination.countryIso2, input.from);
     const quote = await this.pricing.quoteOne(organizationId, destination.countryIso2, null);
     if (quote === null || quote.micros <= 0n) {
       throw sms('no_route');
@@ -233,10 +262,62 @@ export class SendService {
       body: analysis.text,
       encoding: analysis.encoding,
       segments: analysis.segmentCount,
-      templateId: template.id,
+      templateId: rendered.templateId,
       variables: input.variables ?? {},
       price: quote.micros * BigInt(analysis.segmentCount),
     };
+  }
+
+  private async render(
+    organizationId: string,
+    input: SendInput,
+  ): Promise<{ text: string; templateId: string | null }> {
+    if (input.text !== undefined) {
+      return { text: input.text, templateId: null };
+    }
+    if (input.templateId === undefined) {
+      throw new ApiError(400, 'validation_error', 'Send text or a template.', {
+        text: 'Required.',
+      });
+    }
+    const template = await this.prisma.template.findFirst({
+      where: { id: input.templateId, organizationId },
+    });
+    if (template === null || !templateCanBeSent(template.status)) {
+      throw sms('template_not_approved');
+    }
+    const rendered = renderTemplate(template.body, input.variables ?? {});
+    if (!rendered.ok) {
+      throw sms('missing_variable');
+    }
+    return { text: rendered.text, templateId: template.id };
+  }
+
+  private async senderValue(
+    organizationId: string,
+    countryIso2: string,
+    value: string,
+  ): Promise<string> {
+    const country = await this.prisma.country.findUnique({ where: { iso2: countryIso2 } });
+    const checked = checkSender(value, {
+      alphanumericAllowed: country?.alphaSenderAllowed !== false,
+    });
+    if (!checked.ok) {
+      throw sms('invalid_sender');
+    }
+    const setting = await this.prisma.platformSetting.findUnique({
+      where: { id: PLATFORM_SETTING_ID },
+    });
+    if (configuredSharedSender(setting?.sharedSender) === checked.value) {
+      return checked.value;
+    }
+    const sender = await this.prisma.senderId.findFirst({
+      where: { organizationId, value: checked.value, status: 'APPROVED' },
+    });
+    if (sender === null) {
+      throw sms('sender_not_approved');
+    }
+    return sender.value;
   }
 
   private async destination(
@@ -335,6 +416,7 @@ export class SendService {
         organizationId,
         createdAt: { gte: start },
         status: { notIn: ['FAILED', 'REJECTED'] },
+        billable: true,
         priceMicros: { not: null },
       },
       _sum: { priceMicros: true },

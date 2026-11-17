@@ -114,6 +114,12 @@ services:
       DATABASE_POOL_MAX: '8'
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       API_INTERNAL_URL: http://api:4000
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?Copy .env.example to .env first}
+      PUBLIC_ORIGIN: http://localhost:${HTTP_PORT:-8080}
+      EMAIL_MODE: ${EMAIL_MODE:-disabled}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM: ${SMTP_FROM:-}
     healthcheck:
       test: ['CMD', 'node', 'dist/healthcheck.js']
       interval: 10s

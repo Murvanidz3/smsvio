@@ -1,3 +1,4 @@
+export * from './customer-event.js';
 export * from './logging.js';
 export * from './prisma.js';
 export * from './probes.js';

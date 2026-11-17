@@ -4,6 +4,7 @@ import { createLoggerModule, PrismaModule, RedisModule } from '@smsvio/server';
 
 import { AccountsModule } from './accounts/accounts.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
+import { DeveloperModule } from './developer/developer.module.js';
 import { MessagingModule } from './messaging/messaging.module.js';
 import { API_ENV } from './config.js';
 import type { ApiEnv } from './env.js';
@@ -43,6 +44,7 @@ export class AppModule {
         AccountsModule,
         CatalogModule,
         MessagingModule,
+        DeveloperModule,
       ],
       controllers: [HealthController],
     };

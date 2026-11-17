@@ -63,6 +63,8 @@ describe('rate limits', () => {
     expect(decideRateLimit(1, 2, null, 1_000, 60_000)).toEqual({
       allowed: true,
       retryAfterSeconds: 0,
+      limit: 2,
+      remaining: 1,
     });
     expect(decideRateLimit(3, 2, null, 1_000, 60_000).allowed).toBe(false);
     expect(decideRateLimit(3, 2, 1_000, 2_000, 60_000).retryAfterSeconds).toBeGreaterThan(0);

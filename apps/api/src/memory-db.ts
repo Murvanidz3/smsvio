@@ -143,6 +143,50 @@ interface MessageRow {
   failedAt: Date | null;
   attempt: number;
   failedRouteIds: string[];
+  billable: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface ApiKeyRow {
+  id: string;
+  organizationId: string;
+  name: string;
+  mode: 'LIVE' | 'TEST';
+  prefix: string;
+  keyHash: string;
+  last4: string;
+  status: 'ACTIVE' | 'DISABLED';
+  lastUsedAt: Date | null;
+  createdById: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface WebhookEndpointRow {
+  id: string;
+  organizationId: string;
+  name: string;
+  url: string;
+  secretEnc: string;
+  events: string[];
+  status: 'ACTIVE' | 'DISABLED';
+  consecutiveFailures: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface WebhookDeliveryRow {
+  id: string;
+  endpointId: string;
+  eventId: string;
+  eventType: string;
+  payload: unknown;
+  attempt: number;
+  responseStatus: number | null;
+  responseMs: number | null;
+  nextRetryAt: Date | null;
+  status: 'PENDING' | 'SUCCEEDED' | 'FAILED';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -214,35 +258,36 @@ function isWhere(value: unknown): value is Where {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function compareValues(value: unknown, bound: unknown): number | null {
+  if (value instanceof Date && bound instanceof Date) {
+    return value.getTime() - bound.getTime();
+  }
+  if (typeof value === 'string' && typeof bound === 'string') {
+    return value < bound ? -1 : value > bound ? 1 : 0;
+  }
+  return null;
+}
+
 function matchFilter(value: unknown, filter: Record<string, unknown>): boolean {
   let saw = false;
   if ('gt' in filter) {
     saw = true;
-    if (!(
-      value instanceof Date &&
-      filter.gt instanceof Date &&
-      value.getTime() > filter.gt.getTime()
-    )) {
+    const order = compareValues(value, filter.gt);
+    if (order === null || order <= 0) {
       return false;
     }
   }
   if ('gte' in filter) {
     saw = true;
-    if (!(
-      value instanceof Date &&
-      filter.gte instanceof Date &&
-      value.getTime() >= filter.gte.getTime()
-    )) {
+    const order = compareValues(value, filter.gte);
+    if (order === null || order < 0) {
       return false;
     }
   }
   if ('lt' in filter) {
     saw = true;
-    if (!(
-      value instanceof Date &&
-      filter.lt instanceof Date &&
-      value.getTime() < filter.lt.getTime()
-    )) {
+    const order = compareValues(value, filter.lt);
+    if (order === null || order >= 0) {
       return false;
     }
   }
@@ -280,28 +325,31 @@ function pageOf<T>(rows: readonly T[], skip?: number, take?: number): T[] {
 
 function byOrder<T extends object>(
   rows: readonly T[],
-  orderBy?: Record<string, 'asc' | 'desc'>,
+  orderBy?: Record<string, 'asc' | 'desc'> | readonly Record<string, 'asc' | 'desc'>[],
 ): T[] {
-  const entry = orderBy === undefined ? undefined : Object.entries(orderBy)[0];
-  if (entry === undefined) {
+  const specs: readonly Record<string, 'asc' | 'desc'>[] =
+    orderBy === undefined ? [] : Array.isArray(orderBy) ? orderBy : [orderBy];
+  const keys = specs.flatMap((spec) => Object.entries(spec));
+  if (keys.length === 0) {
     return [...rows];
   }
-  const [key, direction] = entry;
-  const factor = direction === 'desc' ? -1 : 1;
   return [...rows].sort((left, right) => {
-    const a = (left as Record<string, unknown>)[key];
-    const b = (right as Record<string, unknown>)[key];
-    if (a instanceof Date && b instanceof Date) {
-      return (a.getTime() - b.getTime()) * factor;
-    }
-    if (typeof a === 'string' && typeof b === 'string') {
-      return a.localeCompare(b) * factor;
-    }
-    if (a === null || a === undefined) {
-      return factor;
-    }
-    if (b === null || b === undefined) {
-      return -factor;
+    for (const [key, direction] of keys) {
+      const factor = direction === 'desc' ? -1 : 1;
+      const a = (left as Record<string, unknown>)[key];
+      const b = (right as Record<string, unknown>)[key];
+      if (a instanceof Date && b instanceof Date && a.getTime() !== b.getTime()) {
+        return (a.getTime() - b.getTime()) * factor;
+      }
+      if (typeof a === 'string' && typeof b === 'string' && a !== b) {
+        return a.localeCompare(b) * factor;
+      }
+      if ((a === null || a === undefined) && b !== null && b !== undefined) {
+        return factor;
+      }
+      if ((b === null || b === undefined) && a !== null && a !== undefined) {
+        return -factor;
+      }
     }
     return 0;
   });
@@ -839,6 +887,14 @@ export function createMemoryDb() {
         contacts.set(row.id, row);
         return Promise.resolve(row);
       },
+      update: ({ where, data }: { where: { id: string }; data: Partial<ContactRow> }) => {
+        const row = contacts.get(where.id);
+        if (row === undefined) {
+          throw new Error(`missing contact ${where.id}`);
+        }
+        Object.assign(row, data, { updatedAt: new Date() });
+        return Promise.resolve(row);
+      },
       delete: ({ where }: { where: { id: string } }) => {
         const row = contacts.get(where.id);
         if (row === undefined) {
@@ -989,6 +1045,7 @@ export function createMemoryDb() {
           failedAt: null,
           attempt: 0,
           failedRouteIds: [],
+          billable: true,
           ...stamp(),
           ...data,
         };
@@ -1257,6 +1314,9 @@ function createMessagingMemory() {
   const balances = new Map<string, BalanceRow>();
   const ledger: LedgerRow[] = [];
   const settings = new Map<string, SettingRow>();
+  const apiKeys = new Map<string, ApiKeyRow>();
+  const webhookEndpoints = new Map<string, WebhookEndpointRow>();
+  const webhookDeliveries = new Map<string, WebhookDeliveryRow>();
 
   function timed<T extends object>(data: T & { id?: string }): T & Timed & { id: string } {
     const now = new Date();
@@ -1588,6 +1648,231 @@ function createMessagingMemory() {
           return Promise.resolve(row);
         },
       },
+      apiKey: {
+        findUnique: ({ where }: { where: { id?: string; keyHash?: string } }) => {
+          if (where.id !== undefined) {
+            const row = apiKeys.get(where.id) ?? null;
+            if (row === null || (where.keyHash !== undefined && row.keyHash !== where.keyHash)) {
+              return Promise.resolve(null);
+            }
+            return Promise.resolve(row);
+          }
+          if (where.keyHash === undefined) {
+            return Promise.resolve(null);
+          }
+          return Promise.resolve(
+            [...apiKeys.values()].find((row) => row.keyHash === where.keyHash) ?? null,
+          );
+        },
+        findMany: ({
+          where,
+          orderBy,
+          skip,
+          take,
+        }: {
+          where?: Where;
+          orderBy?: Record<string, 'asc' | 'desc'> | Record<string, 'asc' | 'desc'>[];
+          skip?: number;
+          take?: number;
+        }) =>
+          Promise.resolve(
+            pageOf(
+              byOrder(
+                [...apiKeys.values()].filter((row) => matches(row, where ?? {})),
+                orderBy,
+              ),
+              skip,
+              take,
+            ),
+          ),
+        count: ({ where }: { where?: Where }) =>
+          Promise.resolve([...apiKeys.values()].filter((row) => matches(row, where ?? {})).length),
+        create: ({
+          data,
+        }: {
+          data: Omit<ApiKeyRow, 'id' | 'createdAt' | 'updatedAt' | 'lastUsedAt' | 'status'> &
+            Partial<ApiKeyRow>;
+        }) => {
+          if ([...apiKeys.values()].some((row) => row.keyHash === data.keyHash)) {
+            uniqueConflict();
+          }
+          const row: ApiKeyRow = {
+            lastUsedAt: null,
+            status: 'ACTIVE',
+            ...stamp(),
+            ...data,
+          };
+          apiKeys.set(row.id, row);
+          return Promise.resolve(row);
+        },
+        update: ({ where, data }: { where: { id: string }; data: Partial<ApiKeyRow> }) => {
+          const row = apiKeys.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing api key ${where.id}`);
+          }
+          Object.assign(row, data, { updatedAt: new Date() });
+          return Promise.resolve(row);
+        },
+        delete: ({ where }: { where: { id: string } }) => {
+          const row = apiKeys.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing api key ${where.id}`);
+          }
+          apiKeys.delete(where.id);
+          return Promise.resolve(row);
+        },
+      },
+      webhookEndpoint: {
+        findUnique: ({ where }: { where: { id: string } }) =>
+          Promise.resolve(webhookEndpoints.get(where.id) ?? null),
+        findFirst: ({ where }: { where: Where }) =>
+          Promise.resolve(
+            [...webhookEndpoints.values()].find((row) => matches(row, where)) ?? null,
+          ),
+        findMany: ({
+          where,
+          orderBy,
+          skip,
+          take,
+        }: {
+          where?: Where;
+          orderBy?: Record<string, 'asc' | 'desc'> | Record<string, 'asc' | 'desc'>[];
+          skip?: number;
+          take?: number;
+        }) =>
+          Promise.resolve(
+            pageOf(
+              byOrder(
+                [...webhookEndpoints.values()].filter((row) => matches(row, where ?? {})),
+                orderBy,
+              ),
+              skip,
+              take,
+            ),
+          ),
+        count: ({ where }: { where?: Where }) =>
+          Promise.resolve(
+            [...webhookEndpoints.values()].filter((row) => matches(row, where ?? {})).length,
+          ),
+        create: ({
+          data,
+        }: {
+          data: Omit<
+            WebhookEndpointRow,
+            'id' | 'createdAt' | 'updatedAt' | 'status' | 'consecutiveFailures'
+          > &
+            Partial<WebhookEndpointRow>;
+        }) => {
+          const row: WebhookEndpointRow = {
+            status: 'ACTIVE',
+            consecutiveFailures: 0,
+            ...stamp(),
+            ...data,
+          };
+          webhookEndpoints.set(row.id, row);
+          return Promise.resolve(row);
+        },
+        update: ({ where, data }: { where: { id: string }; data: Partial<WebhookEndpointRow> }) => {
+          const row = webhookEndpoints.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing webhook ${where.id}`);
+          }
+          Object.assign(row, data, { updatedAt: new Date() });
+          return Promise.resolve(row);
+        },
+        updateMany: ({ where, data }: { where: Where; data: Partial<WebhookEndpointRow> }) => {
+          const rows = [...webhookEndpoints.values()].filter((row) => matches(row, where));
+          for (const row of rows) {
+            Object.assign(row, data, { updatedAt: new Date() });
+          }
+          return Promise.resolve({ count: rows.length });
+        },
+        delete: ({ where }: { where: { id: string } }) => {
+          const row = webhookEndpoints.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing webhook ${where.id}`);
+          }
+          webhookEndpoints.delete(where.id);
+          for (const [id, delivery] of webhookDeliveries) {
+            if (delivery.endpointId === where.id) {
+              webhookDeliveries.delete(id);
+            }
+          }
+          return Promise.resolve(row);
+        },
+      },
+      webhookDelivery: {
+        findUnique: ({ where }: { where: { id: string } }) =>
+          Promise.resolve(webhookDeliveries.get(where.id) ?? null),
+        findMany: ({
+          where,
+          orderBy,
+          skip,
+          take,
+        }: {
+          where?: Where;
+          orderBy?: Record<string, 'asc' | 'desc'> | Record<string, 'asc' | 'desc'>[];
+          skip?: number;
+          take?: number;
+        }) =>
+          Promise.resolve(
+            pageOf(
+              byOrder(
+                [...webhookDeliveries.values()].filter((row) => matches(row, where ?? {})),
+                orderBy,
+              ),
+              skip,
+              take,
+            ),
+          ),
+        count: ({ where }: { where?: Where }) =>
+          Promise.resolve(
+            [...webhookDeliveries.values()].filter((row) => matches(row, where ?? {})).length,
+          ),
+        create: ({
+          data,
+        }: {
+          data: Omit<
+            WebhookDeliveryRow,
+            | 'id'
+            | 'createdAt'
+            | 'updatedAt'
+            | 'attempt'
+            | 'responseStatus'
+            | 'responseMs'
+            | 'nextRetryAt'
+            | 'status'
+          > &
+            Partial<WebhookDeliveryRow>;
+        }) => {
+          const row: WebhookDeliveryRow = {
+            attempt: 0,
+            responseStatus: null,
+            responseMs: null,
+            nextRetryAt: null,
+            status: 'PENDING',
+            ...stamp(),
+            ...data,
+          };
+          webhookDeliveries.set(row.id, row);
+          return Promise.resolve(row);
+        },
+        update: ({ where, data }: { where: { id: string }; data: Partial<WebhookDeliveryRow> }) => {
+          const row = webhookDeliveries.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing delivery ${where.id}`);
+          }
+          Object.assign(row, data, { updatedAt: new Date() });
+          return Promise.resolve(row);
+        },
+        deleteMany: ({ where }: { where: Where }) => {
+          const rows = [...webhookDeliveries.values()].filter((row) => matches(row, where));
+          for (const row of rows) {
+            webhookDeliveries.delete(row.id);
+          }
+          return Promise.resolve({ count: rows.length });
+        },
+      },
     },
   };
 }
@@ -1595,10 +1880,31 @@ function createMessagingMemory() {
 export function createMemoryRedis() {
   const strings = new Map<string, string>();
   const sets = new Map<string, Map<string, number>>();
+  const lists = new Map<string, string[]>();
+  const counters = new Map<string, number>();
   return {
     status: 'ready' as const,
     ping: () => Promise.resolve('PONG'),
     quit: () => Promise.resolve('OK'),
+    get: (key: string) => Promise.resolve(strings.get(key) ?? null),
+    incr: (key: string) => {
+      const next = (counters.get(key) ?? 0) + 1;
+      counters.set(key, next);
+      return Promise.resolve(next);
+    },
+    expire: () => Promise.resolve(1),
+    lpush: (key: string, value: string) => {
+      const list = lists.get(key) ?? [];
+      list.unshift(value);
+      lists.set(key, list);
+      return Promise.resolve(list.length);
+    },
+    zadd: (key: string, score: number, member: string) => {
+      const set = sets.get(key) ?? new Map<string, number>();
+      set.set(member, score);
+      sets.set(key, set);
+      return Promise.resolve(1);
+    },
     set: (key: string, value: string) => {
       strings.set(key, value);
       return Promise.resolve('OK');

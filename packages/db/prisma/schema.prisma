@@ -67,6 +67,7 @@ model User {
   auditLogs    AuditLog[]   @relation("AuditActor")
   templates    Template[]
   messages     Message[]
+  apiKeys      ApiKey[]
 
   @@map("users")
 }
@@ -113,6 +114,8 @@ model Organization {
   orgRates     OrgRate[]
   balance      OrgBalance?
   ledgerEntries LedgerEntry[]
+  apiKeys      ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
 
   @@index([status])
   @@map("organizations")
@@ -296,6 +299,8 @@ model Message {
   costMicros        BigInt?
   clientRef         String?
   apiKeyId          String?          @db.Uuid
+  /// Test API keys store the quoted price and leave this false so nothing is charged.
+  billable          Boolean          @default(true)
   userId            String?          @db.Uuid
   scheduledAt       DateTime?
   queuedAt          DateTime?
@@ -311,6 +316,7 @@ model Message {
   user              User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   provider          Provider?        @relation(fields: [providerId], references: [id], onDelete: SetNull)
   route             Route?           @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  apiKey            ApiKey?          @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
   events            MessageEvent[]
 
   @@index([organizationId, createdAt(sort: Desc)])
@@ -533,4 +539,86 @@ model PlatformSetting {
   updatedAt                  DateTime @updatedAt
 
   @@map("platform_settings")
+}
+
+enum ApiKeyMode {
+  LIVE
+  TEST
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum WebhookEndpointStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+/// The full key is shown once. Only its SHA-256 hash, a short prefix, and the last four characters are stored.
+model ApiKey {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  name           String
+  mode           ApiKeyMode
+  prefix         String
+  keyHash        String       @unique
+  last4          String
+  status         ApiKeyStatus @default(ACTIVE)
+  lastUsedAt     DateTime?
+  createdById    String       @db.Uuid
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User         @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  messages       Message[]
+
+  @@index([organizationId, createdAt])
+  @@map("api_keys")
+}
+
+/// secretEnc is AES-256-GCM. The plaintext is a Standard Webhooks secret (whsec_…).
+model WebhookEndpoint {
+  id                  String                @id @default(uuid()) @db.Uuid
+  organizationId      String                @db.Uuid
+  name                String
+  url                 String
+  secretEnc           String
+  events              String[]
+  status              WebhookEndpointStatus @default(ACTIVE)
+  consecutiveFailures Int                   @default(0)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  organization        Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries          WebhookDelivery[]
+
+  @@index([organizationId, createdAt])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id             String                @id @default(uuid()) @db.Uuid
+  endpointId     String                @db.Uuid
+  eventId        String
+  eventType      String
+  payload        Json
+  attempt        Int                   @default(0)
+  responseStatus Int?
+  responseMs     Int?
+  nextRetryAt    DateTime?
+  status         WebhookDeliveryStatus @default(PENDING)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  endpoint       WebhookEndpoint       @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@index([status, nextRetryAt])
+  @@map("webhook_deliveries")
 }

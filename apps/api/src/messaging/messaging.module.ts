@@ -39,6 +39,6 @@ import { SenderService } from './senders.service.js';
     MessageQueryService,
     { provide: MAILER, useFactory: createMailer, inject: [API_ENV] },
   ],
-  exports: [LedgerService],
+  exports: [LedgerService, SendService, PricingService, SenderService],
 })
 export class MessagingModule {}

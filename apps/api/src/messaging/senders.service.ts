@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { PrismaClient } from '@smsvio/db';
 import { smsErrorMessage, checkSender } from '@smsvio/shared';
 import {
@@ -6,7 +6,8 @@ import {
   PLATFORM_SETTING_ID,
   configuredSharedSender,
 } from '@smsvio/shared/billing';
-import { PRISMA } from '@smsvio/server';
+import { PRISMA, REDIS, publishCustomerEvent } from '@smsvio/server';
+import type { Redis } from 'ioredis';
 
 import type { AuthState } from '../accounts/support.js';
 import { assertCapability, writeAudit } from '../accounts/support.js';
@@ -20,6 +21,7 @@ export class SenderService {
   constructor(
     @Inject(PRISMA) private readonly prisma: PrismaClient,
     private readonly pricing: PricingService,
+    @Optional() @Inject(REDIS) private readonly redis?: Redis,
   ) {}
 
   async overview(state: AuthState) {
@@ -129,6 +131,11 @@ export class SenderService {
         meta: { countryIso2: input.countryIso2, senderId: input.senderId },
         ip: client.ip,
       });
+      await publishCustomerEvent(this.prisma, this.redis, {
+        organizationId: state.organizationId,
+        type: 'destination.enabled',
+        data: { id: created.id, country: input.countryIso2 },
+      });
       return { id: created.id, message: `${country.name} is enabled.` };
     } catch (error) {
       if (isUniqueViolation(error)) {
@@ -211,6 +218,11 @@ export class SenderService {
         targetId: sender.id,
         meta: { value: sender.value, type: sender.type },
         ip: client.ip,
+      });
+      await publishCustomerEvent(this.prisma, this.redis, {
+        organizationId: state.organizationId,
+        type: 'sender.requested',
+        data: { id: sender.id, value: sender.value, type: sender.type },
       });
       return {
         id: sender.id,

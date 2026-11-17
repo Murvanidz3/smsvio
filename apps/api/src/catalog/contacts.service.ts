@@ -1,8 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { PrismaClient } from '@smsvio/db';
 import { maskPhone, parseCsv, smsErrorMessage } from '@smsvio/shared';
 import { normalizePhone } from '@smsvio/shared/phone';
-import { PRISMA } from '@smsvio/server';
+import { PRISMA, REDIS, publishCustomerEvent } from '@smsvio/server';
+import type { Redis } from 'ioredis';
 
 import type { AuthState } from '../accounts/support.js';
 import { assertCapability, writeAudit } from '../accounts/support.js';
@@ -29,7 +30,10 @@ interface ImportInput {
 
 @Injectable()
 export class ContactService {
-  constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
+  constructor(
+    @Inject(PRISMA) private readonly prisma: PrismaClient,
+    @Optional() @Inject(REDIS) private readonly redis?: Redis,
+  ) {}
 
   async list(state: AuthState, query: ContactQuery) {
     assertCapability(state, 'view');
@@ -100,7 +104,7 @@ export class ContactService {
 
   async create(
     state: AuthState,
-    input: { phone: string; country?: string; name?: string },
+    input: { phone: string; country?: string; name?: string; attributes?: Record<string, string> },
     client: ClientInfo,
   ) {
     assertCapability(state, 'messaging');
@@ -112,7 +116,7 @@ export class ContactService {
           phoneE164: phone.e164,
           countryCode: phone.countryCode,
           name: blankToNull(input.name),
-          attributes: {},
+          attributes: input.attributes ?? {},
         },
       });
       await writeAudit(this.prisma, {
@@ -123,6 +127,11 @@ export class ContactService {
         targetId: contact.id,
         ip: client.ip,
         meta: { phone: maskPhone(phone.e164) },
+      });
+      await this.emit(state.organizationId, 'contact.created', {
+        id: contact.id,
+        phone: contact.phoneE164,
+        name: contact.name,
       });
       return presentContact(contact);
     } catch (error) {
@@ -209,13 +218,52 @@ export class ContactService {
       ip: client.ip,
       meta: { created, rejected: rejected.length },
     });
+    await this.emit(state.organizationId, 'contact.imported', {
+      created,
+      rejected: rejected.length,
+    });
     return { created, rejected, rejectCsv: toRejectCsv(rejected) };
+  }
+
+  async update(
+    state: AuthState,
+    id: string,
+    input: { name?: string | null; attributes?: Record<string, string>; opted_out?: boolean },
+    client: ClientInfo,
+  ) {
+    assertCapability(state, 'messaging');
+    const current = await this.find(state.organizationId, id);
+    const contact = await this.prisma.contact.update({
+      where: { id: current.id },
+      data: {
+        ...(input.name === undefined ? {} : { name: input.name }),
+        ...(input.attributes === undefined ? {} : { attributes: input.attributes }),
+        ...(input.opted_out === undefined ? {} : { optedOut: input.opted_out }),
+      },
+    });
+    await writeAudit(this.prisma, {
+      organizationId: state.organizationId,
+      actorUserId: state.userId,
+      action: 'contact.updated',
+      targetType: 'contact',
+      targetId: contact.id,
+      ip: client.ip,
+      meta: { phone: maskPhone(contact.phoneE164) },
+    });
+    await this.emit(state.organizationId, 'contact.updated', {
+      id: contact.id,
+      phone: contact.phoneE164,
+      name: contact.name,
+      opted_out: contact.optedOut,
+    });
+    return presentContact(contact);
   }
 
   async remove(state: AuthState, id: string, client: ClientInfo) {
     assertCapability(state, 'messaging');
     const contact = await this.find(state.organizationId, id);
     await this.prisma.contact.delete({ where: { id: contact.id } });
+    await this.emit(state.organizationId, 'contact.deleted', { id: contact.id });
     await writeAudit(this.prisma, {
       organizationId: state.organizationId,
       actorUserId: state.userId,
@@ -226,6 +274,14 @@ export class ContactService {
       meta: { phone: maskPhone(contact.phoneE164) },
     });
     return { message: 'Contact deleted.' };
+  }
+
+  private async emit(
+    organizationId: string,
+    type: string,
+    data: Record<string, string | number | boolean | null>,
+  ): Promise<void> {
+    await publishCustomerEvent(this.prisma, this.redis, { organizationId, type, data });
   }
 
   private async find(organizationId: string, id: string) {

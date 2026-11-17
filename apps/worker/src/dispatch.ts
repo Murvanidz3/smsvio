@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@smsvio/db';
+import { publishCustomerEvent } from '@smsvio/server';
 import { orderedRoutes } from '@smsvio/shared/billing';
 import {
   MOCK_CALLBACK_SECRET,
@@ -53,7 +54,7 @@ export async function runSendTick(
   await deliverCallbacks(redis, now);
   await sendQueued(prisma, redis, now);
   await applyReceipts(prisma, redis, now);
-  await expireSent(prisma, now);
+  await expireSent(prisma, redis, now);
   await requeueStuck(prisma, redis, now);
 }
 
@@ -189,18 +190,13 @@ async function dispatchMessage(
       data: { failedRouteIds: failed, attempt: 0 },
     });
   }
-  await markFailed(prisma, message, 'no_route');
+  await markFailed(prisma, redis, message, 'no_route');
 }
 
 async function markSent(
   prisma: PrismaClient,
   redis: SendRedis,
-  message: {
-    id: string;
-    organizationId: string;
-    priceMicros: bigint | null;
-    segments: number;
-  },
+  message: CustomerMessage,
   routeId: string,
   providerId: string,
   routeCostMicros: bigint,
@@ -209,11 +205,12 @@ async function markSent(
 ): Promise<void> {
   const price = message.priceMicros ?? 0n;
   const cost = routeCostMicros * BigInt(message.segments);
-  await prisma.$transaction(async (tx) => {
-    if (price > 0n) {
+  const billable = message.billable !== false;
+  const updated = await prisma.$transaction(async (tx) => {
+    if (billable && price > 0n) {
       await settle(tx, message.organizationId, price, message.id, 'CHARGE', 'Carrier accepted');
     }
-    const updated = await tx.message.updateMany({
+    const changed = await tx.message.updateMany({
       where: { id: message.id, status: 'SENDING' },
       data: {
         status: 'SENT',
@@ -225,12 +222,19 @@ async function markSent(
         errorCode: null,
       },
     });
-    if (updated.count === 1) {
+    if (changed.count === 1) {
       await tx.messageEvent.create({
         data: { messageId: message.id, status: 'SENT', detail: 'Accepted by the provider.' },
       });
     }
+    return changed.count;
   });
+  if (updated === 1) {
+    await emitStatus(prisma, redis, message, 'message.sent', 'sent');
+    if (billable && price > 0n) {
+      await emitBilling(prisma, redis, message, 'billing.charged', price);
+    }
+  }
   await redis.zadd(
     CALLBACK_DELAY_KEY,
     now + result.receipt.delayMs,
@@ -293,24 +297,33 @@ async function postMockCallback(body: { id: string; status: string }): Promise<b
 
 async function markFailed(
   prisma: PrismaClient,
-  message: { id: string; organizationId: string; priceMicros: bigint | null },
+  redis: SendRedis,
+  message: CustomerMessage,
   errorCode: string,
 ): Promise<void> {
   const price = message.priceMicros ?? 0n;
-  await prisma.$transaction(async (tx) => {
-    if (price > 0n) {
+  const billable = message.billable !== false;
+  const updated = await prisma.$transaction(async (tx) => {
+    if (billable && price > 0n) {
       await settle(tx, message.organizationId, price, message.id, 'RELEASE', 'Send failed');
     }
-    const updated = await tx.message.updateMany({
+    const changed = await tx.message.updateMany({
       where: { id: message.id, status: { in: ['QUEUED', 'SENDING'] } },
       data: { status: 'FAILED', errorCode, failedAt: new Date() },
     });
-    if (updated.count === 1) {
+    if (changed.count === 1) {
       await tx.messageEvent.create({
         data: { messageId: message.id, status: 'FAILED', detail: errorCode },
       });
     }
+    return changed.count;
   });
+  if (updated === 1) {
+    await emitStatus(prisma, redis, message, 'message.failed', 'failed');
+    if (billable && price > 0n) {
+      await emitBilling(prisma, redis, message, 'billing.released', price);
+    }
+  }
 }
 
 async function applyReceipts(prisma: PrismaClient, redis: SendRedis, now: number): Promise<void> {
@@ -351,10 +364,11 @@ async function applyReceipts(prisma: PrismaClient, redis: SendRedis, now: number
     await prisma.messageEvent.create({
       data: { messageId: message.id, status: next, detail: 'Delivery receipt.' },
     });
+    await emitStatus(prisma, redis, message, receiptEvent(next), next.toLowerCase());
   }
 }
 
-async function expireSent(prisma: PrismaClient, now: number): Promise<void> {
+async function expireSent(prisma: PrismaClient, redis: SendRedis, now: number): Promise<void> {
   const stale = await prisma.message.findMany({
     where: { status: 'SENT', sentAt: { lt: new Date(now - MESSAGE_VALIDITY_MS) } },
     take: 100,
@@ -371,8 +385,64 @@ async function expireSent(prisma: PrismaClient, now: number): Promise<void> {
       await prisma.messageEvent.create({
         data: { messageId: message.id, status: 'EXPIRED', detail: 'Validity period elapsed.' },
       });
+      await emitStatus(prisma, redis, message, 'message.expired', 'expired');
     }
   }
+}
+
+interface CustomerMessage {
+  id: string;
+  organizationId: string;
+  to: string;
+  fromSender: string;
+  segments: number;
+  priceMicros: bigint | null;
+  billable?: boolean;
+}
+
+function receiptEvent(status: string): string {
+  if (status === 'DELIVERED') {
+    return 'message.delivered';
+  }
+  if (status === 'UNDELIVERED') {
+    return 'message.undelivered';
+  }
+  return 'message.expired';
+}
+
+async function emitStatus(
+  prisma: PrismaClient,
+  redis: SendRedis,
+  message: CustomerMessage,
+  type: string,
+  status: string,
+): Promise<void> {
+  await publishCustomerEvent(prisma, redis, {
+    organizationId: message.organizationId,
+    type,
+    data: {
+      id: message.id,
+      to: message.to,
+      from: message.fromSender,
+      status,
+      segments: message.segments,
+      price_micros: (message.priceMicros ?? 0n).toString(),
+    },
+  });
+}
+
+async function emitBilling(
+  prisma: PrismaClient,
+  redis: SendRedis,
+  message: CustomerMessage,
+  type: 'billing.charged' | 'billing.released',
+  amount: bigint,
+): Promise<void> {
+  await publishCustomerEvent(prisma, redis, {
+    organizationId: message.organizationId,
+    type,
+    data: { message_id: message.id, amount_micros: amount.toString() },
+  });
 }
 
 async function requeueStuck(prisma: PrismaClient, redis: SendRedis, now: number): Promise<void> {

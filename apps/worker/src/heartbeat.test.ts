@@ -34,6 +34,7 @@ const env = loadWorkerEnv({
   REDIS_URL: 'redis://redis:6379',
   DATABASE_URL: 'postgresql://smsvio:pw@postgres:5432/smsvio',
   WORKER_HEARTBEAT_INTERVAL_MS: '1000',
+  APP_ENCRYPTION_KEY: 'ab'.repeat(32),
 });
 
 describe('isHeartbeatFresh', () => {

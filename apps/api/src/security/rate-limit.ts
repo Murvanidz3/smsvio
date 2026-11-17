@@ -8,6 +8,8 @@ import { randomToken } from './tokens.js';
 export interface RateLimitDecision {
   readonly allowed: boolean;
   readonly retryAfterSeconds: number;
+  readonly limit: number;
+  readonly remaining: number;
 }
 
 export function decideRateLimit(
@@ -17,11 +19,12 @@ export function decideRateLimit(
   now: number,
   windowMs: number,
 ): RateLimitDecision {
+  const remaining = Math.max(0, limit - count);
   if (count <= limit) {
-    return { allowed: true, retryAfterSeconds: 0 };
+    return { allowed: true, retryAfterSeconds: 0, limit, remaining };
   }
   const retryMs = oldestScore === null ? windowMs : Math.max(1000, oldestScore + windowMs - now);
-  return { allowed: false, retryAfterSeconds: Math.ceil(retryMs / 1000) };
+  return { allowed: false, retryAfterSeconds: Math.ceil(retryMs / 1000), limit, remaining: 0 };
 }
 
 @Injectable()

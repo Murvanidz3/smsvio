@@ -2,10 +2,11 @@ import { Module, type DynamicModule } from '@nestjs/common';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { createLoggerModule, PrismaModule, RedisModule } from '@smsvio/server';
 
-import type { WorkerEnv } from './env.js';
+import { WORKER_ENV, type WorkerEnv } from './env.js';
 import { HEARTBEAT_SETTINGS, HeartbeatService, type HeartbeatSettings } from './heartbeat.js';
 import { LedgerSweep } from './ledger-sweep.js';
 import { SendLoop } from './send-loop.js';
+import { WebhookLoop } from './webhook-loop.js';
 
 @Module({})
 export class WorkerModule {
@@ -27,9 +28,11 @@ export class WorkerModule {
       ],
       providers: [
         { provide: HEARTBEAT_SETTINGS, useValue: heartbeat },
+        { provide: WORKER_ENV, useValue: env },
         HeartbeatService,
         LedgerSweep,
         SendLoop,
+        WebhookLoop,
       ],
     };
   }

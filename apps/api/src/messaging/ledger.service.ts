@@ -1,8 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma, type PrismaClient } from '@smsvio/db';
 import { smsErrorMessage } from '@smsvio/shared';
 import { ledgerDifferences } from '@smsvio/shared/billing';
-import { PRISMA } from '@smsvio/server';
+import { PRISMA, REDIS, publishCustomerEvent } from '@smsvio/server';
+import type { Redis } from 'ioredis';
 
 import { writeAudit } from '../accounts/support.js';
 import type { ClientInfo } from '../http/client.js';
@@ -22,7 +23,10 @@ export interface LedgerRef {
  */
 @Injectable()
 export class LedgerService {
-  constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
+  constructor(
+    @Inject(PRISMA) private readonly prisma: PrismaClient,
+    @Optional() @Inject(REDIS) private readonly redis?: Redis,
+  ) {}
 
   async adjust(
     actorUserId: string,
@@ -78,6 +82,15 @@ export class LedgerService {
         ip: client.ip,
       });
       return next;
+    });
+    await publishCustomerEvent(this.prisma, this.redis, {
+      organizationId,
+      type: 'billing.adjusted',
+      data: {
+        direction: input.direction,
+        amount_micros: input.amount.toString(),
+        available_micros: balance.availableMicros.toString(),
+      },
     });
     return {
       message:

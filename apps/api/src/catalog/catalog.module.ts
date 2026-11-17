@@ -18,5 +18,6 @@ import { TemplateService } from './templates.service.js';
     SessionService,
     RateLimiter,
   ],
+  exports: [ContactService, TemplateService, LookupService],
 })
 export class CatalogModule {}
