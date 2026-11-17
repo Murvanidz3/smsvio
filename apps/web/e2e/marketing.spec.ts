@@ -69,7 +69,9 @@ test.describe('marketing interactions', () => {
       'https://t.me/CFX555',
     );
     await expect(page.getByText(/countries · Pay as you go · No monthly fee/)).toBeVisible();
-    await expect(page.getByText('SMSVIO Digital')).toBeVisible();
+    const footer = page.locator('footer');
+    await expect(footer.getByText('SMSVIO Digital', { exact: true })).toBeVisible();
+    await expect(footer.getByText(/© \d{4} SMSVIO Digital/)).toBeVisible();
   });
 
   test('replaces sign in when a session cookie is present', async ({ page }) => {
