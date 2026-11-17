@@ -1,27 +1,58 @@
-import { ArrowRight } from 'lucide-react';
+import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import Link from 'next/link';
+import { SESSION_COOKIE } from '@smsvio/shared';
 
-import { Button } from '@/components/ui/button';
+import { SALES_URL } from './company';
+import { PhoneDemo } from './phone-demo';
+import { loadPublicRates } from './rates';
 
-export default function LandingPage() {
+export const metadata: Metadata = {
+  title: { absolute: 'SMSVIO — Send SMS anywhere' },
+  description:
+    'Send SMS to the countries you enable. One dashboard, one API, and a live delivery status. Prepaid, with no monthly fee.',
+};
+
+export default async function LandingPage() {
+  const [rates, jar] = await Promise.all([loadPublicRates(), cookies()]);
+  const signedIn = jar.get(SESSION_COOKIE)?.value !== undefined;
+  const count = new Intl.NumberFormat('en-US').format(rates.count);
+
   return (
-    <section className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
-      <p className="bg-accent text-accent-foreground rounded-full px-3 py-1 text-xs font-semibold tracking-wide uppercase">
-        Launching soon
-      </p>
-      <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-balance sm:text-5xl">
-        Business SMS, from one dashboard and one API.
-      </h1>
-      <p className="text-muted-foreground mt-5 max-w-xl text-lg text-pretty">
-        SMSVIO helps teams send transactional and marketing messages to phones around the world. We
-        are getting the platform ready for launch.
-      </p>
-      <Button asChild size="lg" className="mt-9 h-11 px-5 text-base">
-        <Link href="/signin">
-          Sign in
-          <ArrowRight data-icon="inline-end" aria-hidden />
-        </Link>
-      </Button>
+    <section className="mkt-hero">
+      <div className="mkt-wrap mkt-hero-grid">
+        <div className="mkt-hero-copy mkt-rise">
+          <p className="mkt-eyebrow">SMS for every country</p>
+          <h1>
+            Send SMS anywhere. <em>See</em> every delivery.
+          </h1>
+          <p className="mkt-lead">
+            Reach a phone in any country you enable. One API, a live status for every message, and a
+            prepaid balance with no monthly fee.
+          </p>
+          <div className="mkt-actions">
+            {signedIn ? (
+              <Link className="mkt-button mkt-button-brand" href="/dashboard">
+                Open dashboard
+              </Link>
+            ) : (
+              <Link className="mkt-button mkt-button-brand" href="/signup">
+                Get started
+              </Link>
+            )}
+            <a className="mkt-button mkt-button-line" href={SALES_URL} rel="noopener noreferrer">
+              Contact sales
+            </a>
+          </div>
+          <p className="mkt-facts">
+            {rates.count > 0 ? `${count} countries · ` : null}
+            Pay as you go · No monthly fee
+          </p>
+        </div>
+        <div className="mkt-rise mkt-rise-late">
+          <PhoneDemo countries={rates.countries} />
+        </div>
+      </div>
     </section>
   );
 }

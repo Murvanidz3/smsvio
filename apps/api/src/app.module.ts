@@ -7,6 +7,7 @@ import { BillingModule } from './billing/billing.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { DeveloperModule } from './developer/developer.module.js';
 import { MessagingModule } from './messaging/messaging.module.js';
+import { PublicRatesModule } from './public/public.module.js';
 import { API_ENV } from './config.js';
 import type { ApiEnv } from './env.js';
 import { HealthController } from './health/health.controller.js';
@@ -47,6 +48,7 @@ export class AppModule {
         CatalogModule,
         MessagingModule,
         DeveloperModule,
+        PublicRatesModule,
       ],
       controllers: [HealthController],
     };

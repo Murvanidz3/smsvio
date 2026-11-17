@@ -1,28 +1,49 @@
-import Link from 'next/link';
+import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google';
+import { cookies } from 'next/headers';
+import { SESSION_COOKIE } from '@smsvio/shared';
 import type { ReactNode } from 'react';
 
-import { Logo } from '@/components/brand/logo';
-import { ThemeToggle } from '@/components/theme-toggle';
-import { Button } from '@/components/ui/button';
+import { MarketingFooter } from './footer';
+import { MarketingHeader } from './header';
+import { MarketingTone } from './tone';
 
-export default function MarketingLayout({ children }: { children: ReactNode }) {
+import './marketing.css';
+
+const display = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  style: ['normal', 'italic'],
+  display: 'swap',
+  variable: '--font-mkt-display',
+});
+
+const sans = Geist({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  display: 'swap',
+  variable: '--font-mkt-sans',
+});
+
+const mono = Geist_Mono({
+  subsets: ['latin'],
+  weight: ['400'],
+  display: 'swap',
+  variable: '--font-mkt-mono',
+});
+
+export default async function MarketingLayout({ children }: { children: ReactNode }) {
+  const jar = await cookies();
+  const signedIn = jar.get(SESSION_COOKIE)?.value !== undefined;
+
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
-        <Link href="/" aria-label="SMSVIO home" className="rounded-md">
-          <Logo />
-        </Link>
-        <nav aria-label="Main" className="flex items-center gap-2">
-          <ThemeToggle />
-          <Button asChild variant="outline">
-            <Link href="/signin">Sign in</Link>
-          </Button>
-        </nav>
-      </header>
-      <main className="flex flex-1 flex-col">{children}</main>
-      <footer className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
-        <p className="text-muted-foreground text-sm">© {new Date().getFullYear()} SMSVIO</p>
-      </footer>
+    <div className={`mkt ${display.variable} ${sans.variable} ${mono.variable}`} data-marketing="">
+      <MarketingTone />
+      <a className="mkt-skip" href="#content">
+        Skip to content
+      </a>
+      <MarketingHeader signedIn={signedIn} />
+      <main id="content">{children}</main>
+      <MarketingFooter />
     </div>
   );
 }

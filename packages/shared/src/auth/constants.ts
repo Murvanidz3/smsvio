@@ -41,6 +41,8 @@ export const RATE_LIMITS = {
   phoneIp: { limit: 10, windowMs: 60 * 60 * 1000 },
   /** Number lookup is computed locally, but it is still limited per signed-in user. */
   lookupUser: { limit: 30, windowMs: 60 * 1000 },
+  /** Public country list for the marketing site. The page caches it for 10 minutes. */
+  publicRates: { limit: 120, windowMs: 60 * 1000 },
 } as const;
 
 export const MEMBERSHIP_ROLES = ['OWNER', 'ADMIN', 'DEVELOPER', 'BILLING', 'VIEWER'] as const;

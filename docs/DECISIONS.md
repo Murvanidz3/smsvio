@@ -561,3 +561,28 @@ and cards inverted. SMSVIO keeps its own name, mark, and wording.
   demo account in once per project and passed the 20-attempt sign-in limit. The end-to-end
   process sets `E2E_RELAX_RATE_LIMITS=1` with `NODE_ENV=test`, which multiplies auth limits by
   ten. Production does not set that flag.
+
+## Marketing site (2026-11-17)
+
+The public page replaces the placeholder. Step 1 is the header, hero, footer, and
+`GET /api/public/rates`. Later sections wait for a review of the live page.
+
+- The company name on the site is **SMSVIO Digital**. The registered address is Business Center,
+  Al Hamra Industrial Zone-FZ, Ras Al Khaimah, United Arab Emirates.
+- Contact sales opens `https://t.me/CFX555`. There are no social links. Email sending stays
+  disabled, so the page does not publish a contact address.
+- Per-country prices are not public yet. The rates endpoint returns enabled countries only: ISO
+  code, name, dial code, alphanumeric sender allowed, registration required, and the count. It
+  does not return a price, cost, provider, route, or margin. The hero says "Contact sales" where
+  a price would have been.
+- Legal drafts were supplied and are marked not approved for publication, including a proposed
+  fictional entity name. Those pages are not published, and the footer does not link to them.
+- The logo file is an ink square and a white tick, so there is no teal to copy. `--brand` is
+  `#0F766E`, the teal already recorded for SMSVIO. `#0F8C7A` is about 3.9:1 on the ivory
+  background and about 4.2:1 behind white button text, so it fails WCAG AA. `#0F766E` passes
+  both. `--brand-ink` is `#0C5E58`. Caption text is `#5F6570` and the delivered label is
+  `#1F7A52`, darkened from the specified values so small text passes AA. The apricot accent is
+  only a glow and a status dot.
+- The public list is cached for 10 minutes and limited to 120 requests a minute per IP. The
+  marketing pages stay server-rendered because the existing nonce content-security policy reads
+  the request.

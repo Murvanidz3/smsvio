@@ -1,30 +1,24 @@
 import { expect, test } from './fixtures';
 
 test.describe('landing page', () => {
-  test('shows the placeholder and links to sign in', async ({ page }) => {
+  test('shows the marketing hero and links home to sign in', async ({ page }) => {
     const response = await page.goto('/');
     expect(response?.status()).toBe(200);
 
-    await expect(page).toHaveTitle('SMSVIO — Business SMS platform');
+    await expect(page).toHaveTitle('SMSVIO — Send SMS anywhere');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'SMSVIO home' })).toBeVisible();
-
-    await page.getByRole('main').getByRole('link', { name: 'Sign in' }).click();
-    await expect(page).toHaveURL('/signin');
-    await expect(page.getByRole('heading', { name: 'Sign in to SMSVIO' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'SMSVIO home' }).first()).toBeVisible();
+    await page.getByRole('link', { name: 'SMSVIO home' }).first().click();
+    await expect(page).toHaveURL('/');
   });
 
-  test('follows the system colour scheme and toggles it', async ({ page }, testInfo) => {
+  test('stays on the ivory surface in either colour scheme', async ({ page }) => {
     await page.goto('/');
-    const html = page.locator('html');
-    const systemDark = testInfo.project.use.colorScheme === 'dark';
-
-    await expect(html).toHaveClass(systemDark ? /\bdark\b/ : /\blight\b/);
-    await page.getByTestId('theme-toggle').click();
-    await expect(html).toHaveClass(systemDark ? /\blight\b/ : /\bdark\b/);
-
-    await page.reload();
-    await expect(html).toHaveClass(systemDark ? /\blight\b/ : /\bdark\b/);
+    await expect(page.getByTestId('theme-toggle')).toHaveCount(0);
+    const background = await page
+      .locator('[data-marketing]')
+      .evaluate((element) => getComputedStyle(element).backgroundColor);
+    expect(background).toBe('rgb(250, 249, 246)');
   });
 
   test('fits the viewport without horizontal scrolling', async ({ page }) => {
@@ -37,6 +31,19 @@ test.describe('landing page', () => {
 });
 
 test.describe('sign-in shell', () => {
+  test('follows the system colour scheme and toggles it', async ({ page }, testInfo) => {
+    await page.goto('/signin');
+    const html = page.locator('html');
+    const systemDark = testInfo.project.use.colorScheme === 'dark';
+
+    await expect(html).toHaveClass(systemDark ? /\bdark\b/ : /\blight\b/);
+    await page.getByTestId('theme-toggle').click();
+    await expect(html).toHaveClass(systemDark ? /\blight\b/ : /\bdark\b/);
+
+    await page.reload();
+    await expect(html).toHaveClass(systemDark ? /\blight\b/ : /\bdark\b/);
+  });
+
   test('renders the shell and is excluded from indexing', async ({ page }) => {
     const response = await page.goto('/signin');
     expect(response?.status()).toBe(200);

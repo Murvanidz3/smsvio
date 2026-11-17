@@ -15,7 +15,7 @@ Phase 0 (foundation and production hosting) remain underneath it.
 
 ```
 apps/
-  web/        Next.js 16 app: landing page, accounts, contacts, templates, senders, send, messages, admin, lookup
+  web/        Next.js 16 app: marketing site, accounts, contacts, templates, senders, send, messages, admin, lookup
   api/        NestJS + Fastify REST API (/api/*, /healthz, /readyz)
   worker/     NestJS worker: send queue, delivery receipts, heartbeat, and a nightly ledger check
   migrate/    One-shot container: Prisma migrations, then the demo seed

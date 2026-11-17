@@ -9,4 +9,5 @@ export * from './developer/schemas.js';
 export * from './env.js';
 export * from './errors.js';
 export * from './health.js';
+export * from './public-rates.js';
 export * from './sms/index.js';
