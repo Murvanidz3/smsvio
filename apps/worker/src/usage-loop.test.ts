@@ -1,7 +1,14 @@
 import { Logger } from '@nestjs/common';
+import nodemailer from 'nodemailer';
 import { describe, expect, it, vi } from 'vitest';
 
 import { UsageLoop } from './usage-loop.js';
+
+vi.mock('nodemailer', () => ({
+  default: {
+    createTransport: vi.fn(() => ({ sendMail: vi.fn(() => Promise.resolve({})) })),
+  },
+}));
 
 const env = {
   EMAIL_MODE: 'disabled' as const,
@@ -46,4 +53,55 @@ describe('usage loop', () => {
     await first;
     loop.onApplicationShutdown();
   });
+
+  it('mails a low balance over SMTP and again without credentials', async () => {
+    const prisma = lowBalancePrisma();
+    const secure = new UsageLoop(
+      prisma as never,
+      {
+        EMAIL_MODE: 'smtp',
+        SMTP_HOST: 'smtp.example',
+        SMTP_PORT: 465,
+        SMTP_USER: 'mailer',
+        SMTP_PASSWORD: 'secret',
+        SMTP_FROM: 'SMSVIO <notify@example.com>',
+      } as never,
+    );
+    await secure.tick();
+    const plain = new UsageLoop(
+      lowBalancePrisma() as never,
+      {
+        EMAIL_MODE: 'smtp',
+        SMTP_HOST: 'smtp.example',
+        SMTP_PORT: 587,
+        SMTP_FROM: 'SMSVIO <notify@example.com>',
+      } as never,
+    );
+    await plain.tick();
+    expect(nodemailer.createTransport).toHaveBeenCalled();
+    secure.onApplicationShutdown();
+    plain.onApplicationShutdown();
+  });
 });
+
+function lowBalancePrisma() {
+  return {
+    organization: { findMany: () => Promise.resolve([]) },
+    billingProfile: {
+      findMany: () =>
+        Promise.resolve([
+          {
+            organizationId: 'org-1',
+            lowBalanceMicros: 1_000_000n,
+            lowBalanceNotifiedAt: null,
+            email: 'billing@example.com',
+          },
+        ]),
+      update: () => Promise.resolve({}),
+    },
+    orgBalance: { findUnique: () => Promise.resolve({ availableMicros: 0n }) },
+    membership: {
+      findMany: () => Promise.resolve([{ user: { email: 'owner@example.com' } }]),
+    },
+  };
+}

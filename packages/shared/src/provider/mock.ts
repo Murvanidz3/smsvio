@@ -19,7 +19,8 @@ export type ProviderSendResult =
   | {
       readonly status: 'accepted';
       readonly providerMessageId: string;
-      readonly receipt: ScheduledReceipt;
+      /** Present for the mock provider, which schedules its own receipt. A carrier receipt arrives later. */
+      readonly receipt?: ScheduledReceipt;
     }
   | { readonly status: 'temporary_failure'; readonly errorCode: 'carrier_rejected' }
   | { readonly status: 'permanent_failure'; readonly errorCode: 'carrier_rejected' };

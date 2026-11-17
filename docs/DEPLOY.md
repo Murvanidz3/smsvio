@@ -363,6 +363,26 @@ Phase 5 adds no payment-provider variables. `POST /api/internal/billing/top-ups`
 are not charged. Low-balance email uses `EMAIL_MODE` and the SMTP settings the worker already
 has. The migrate job creates `billing_profiles` and `daily_usage` on the next deploy.
 
+**Carriers and compliance**
+
+Phases 6 and 7 add no environment variables. The migrate job creates `compliance_profiles`,
+`use_cases`, `compliance_documents`, `auto_replies`, and `opt_outs`.
+
+SMPP and HTTP credentials are pasted as JSON on the provider in Admin and stored in
+`Provider.configEnc` with `APP_ENCRYPTION_KEY`. Do not put them in `/opt/smsvio/.env`.
+
+SMPP JSON: `host`, `port`, `systemId`, `password`, and optional `systemType` (default `""`),
+`sourceTon` (default 5), `sourceNpi` (default 0), `window` (default 10).
+
+HTTP JSON: `url` (https only), optional `headers`, `idField` (default `id`),
+`acceptedStatuses` (default 200, 201, 202), `permanentStatuses` (default 400, 401, 403, 404, 422),
+and `receiptMap` (includes `DELIVRD`, `UNDELIV`, `EXPIRED`, `REJECTD`). The callback is
+`POST /api/hooks/providers/<code>` with header `x-smsvio-signature` set to the callback secret
+shown when the provider is created.
+
+Test API keys stay on the mock provider. A live send can use an active mock, SMPP, or HTTP route.
+An accepted live send does not invent a delivery receipt. No staged handset test has been run.
+
 **CI deploy key**: generate a new key pair (section 1.2). Give the public key the comment
 `smsvio-github-actions`, append it to `/home/deploy/.ssh/authorized_keys`, then run
 `install-ssh-guard.sh` so the new line is forced through the guard. Update the `VPS_SSH_KEY`

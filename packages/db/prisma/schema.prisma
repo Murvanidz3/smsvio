@@ -118,6 +118,11 @@ model Organization {
   webhookEndpoints WebhookEndpoint[]
   billingProfile BillingProfile?
   dailyUsage   DailyUsage[]
+  complianceProfile ComplianceProfile?
+  useCases     UseCase[]
+  complianceDocuments ComplianceDocument[]
+  autoReplies  AutoReply[]
+  optOuts      OptOut[]
 
   @@index([status])
   @@map("organizations")
@@ -663,4 +668,98 @@ model WebhookDelivery {
   @@index([endpointId, createdAt])
   @@index([status, nextRetryAt])
   @@map("webhook_deliveries")
+}
+
+/// Submitted business verification. A row means the form is locked until an operator decides.
+model ComplianceProfile {
+  organizationId       String       @id @db.Uuid
+  legalName            String
+  address              String
+  website              String?
+  registrationNumber   String?
+  registrationCountry  String       @db.Char(2)
+  submittedAt          DateTime     @default(now())
+  reviewNote           String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("compliance_profiles")
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model UseCase {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  purpose        String
+  sample         String
+  optIn          String
+  status         ReviewStatus @default(PENDING)
+  reviewNote     String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([status, createdAt])
+  @@map("use_cases")
+}
+
+/// Private file. The bytes are AES-256-GCM ciphertext, not a public URL.
+model ComplianceDocument {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  countryIso2    String       @db.Char(2)
+  kind           String
+  filename       String
+  contentType    String
+  bytesEnc       String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("compliance_documents")
+}
+
+enum AutoReplyCategory {
+  HELP
+  OPT_IN
+  OPT_OUT
+  CUSTOM
+}
+
+model AutoReply {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @db.Uuid
+  category       AutoReplyCategory
+  keywords       String[]
+  body           String
+  protected      Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("auto_replies")
+}
+
+/// Survives contact deletion. A send to this number is recipient_opted_out.
+model OptOut {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  phoneE164      String
+  source         String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, phoneE164])
+  @@index([organizationId])
+  @@map("opt_outs")
 }

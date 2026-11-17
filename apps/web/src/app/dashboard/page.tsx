@@ -87,10 +87,10 @@ function Dashboard() {
       {data?.verification === 'PENDING_VERIFICATION' ? (
         <p className="border-border bg-muted/40 rounded-xl border px-4 py-3 text-sm">
           Business verification is not finished.{' '}
-          <Link href="/dashboard/settings" className="font-semibold underline">
-            Review business details
+          <Link href="/dashboard/compliance" className="font-semibold underline">
+            Open compliance
           </Link>
-          . The compliance form arrives with the operator queue.
+          .
         </p>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

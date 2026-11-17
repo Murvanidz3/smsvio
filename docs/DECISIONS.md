@@ -478,3 +478,49 @@ and cards inverted. SMSVIO keeps its own name, mark, and wording.
   cost is price times the floored message count times segments. The rates CSV is built in the
   browser from the JSON quote list.
 - `AUTO_APPROVE_TEMPLATES` is unchanged.
+
+## Phase 6 — Compliance and the operator console (2026-11-17)
+
+- Business verification is one `ComplianceProfile` row. While it is waiting (`reviewNote` empty
+  and the organization is still `PENDING_VERIFICATION`) another submit is 409. A rejection stores
+  a note, leaves the organization pending, drops the row off the queue, and allows the form to be
+  submitted again. Approval sets the organization to `ACTIVE`. The mail says to update the form
+  and submit again, and that path exists.
+- Default auto-replies are created the first time compliance is opened or an inbound message
+  arrives, not during signup. Keywords match whole tokens, case-insensitive, in the order
+  opt-out, opt-in, help, custom. `please STOP` matches. `unstoppable` does not. Protected replies
+  can be edited but not deleted or recategorized.
+- Opt-out is both `Contact.optedOut` and an `OptOut` row. The row survives contact deletion.
+  Send rejects either match. A keyword confirmation is an unbilled outbound message queued
+  directly, so the opt-out just recorded does not block the confirmation.
+- Compliance files stay in Postgres. The bytes are AES-256-GCM ciphertext under the existing
+  `APP_ENCRYPTION_KEY`, at most 512 KB decoded, and only pdf, png, jpeg, webp, or text/plain.
+  There is no object store and no new secret.
+- Fraud controls are the ones already named by the product: the destination country must be
+  enabled, an unverified organization can text only its verified phone, a suspended organization
+  is rejected, and the opt-out list is independent of contacts. No velocity number was invented.
+- The admin review queue covers pending verification, use cases, senders, and templates.
+  Cross-organization message search, queue health, 30-day margin, and the audit list are on the
+  same admin prefix. The overview banner now links to `/dashboard/compliance`.
+- `AUTO_APPROVE_TEMPLATES` stays `false` in the repository. Production `/opt/smsvio/.env` may
+  still be `true` until the owner turns it off. The review queue is in place either way.
+
+## Phase 7 — Carriers (2026-11-17)
+
+- No SMPP host, system id, password, HTTP vendor, or price list was supplied. None were invented
+  and none were committed. Adapters read the encrypted provider config an operator pastes in
+  admin. A staged live test to handsets was not run.
+- This replaces the Phase 3 rule that dispatch uses only active mock providers. A test key
+  (`billable` false) still uses only `MockProvider`. Live traffic may use an active mock, SMPP,
+  or HTTP route.
+- A mock accept still schedules its own receipt. An SMPP or HTTP accept does not. `receipt` on
+  the send result is optional, and the worker skips the callback delay when it is absent. Real
+  receipts arrive as an HTTP callback or an SMPP `deliver_sm`, then the existing receipt queue
+  and state machine, including the one correction from expired to delivered.
+- HTTP callbacks use `x-smsvio-signature` and the same secret hash as the mock callback. The
+  request URL must be https and is pinned the same way as a webhook. SMPP is an in-process
+  session on `node:net`. The codec lives in `@smsvio/shared/provider`. There is no SMPP library.
+- An inbound message is stored for the organization that most recently sent an outbound message
+  to that handset. If none did, the message is ignored. SMPP `deliver_sm` without the receipt
+  flag is inbound. An HTTP body with `from`, `to`, and `body` is inbound. Unknown provider types
+  still 404. The mock path is unchanged.

@@ -236,10 +236,15 @@ export class SendService {
         throw sms('organization_not_verified');
       }
     }
-    const contact = await this.prisma.contact.findFirst({
-      where: { organizationId, phoneE164: destination.to, optedOut: true },
-    });
-    if (contact !== null) {
+    const [contact, optedOut] = await Promise.all([
+      this.prisma.contact.findFirst({
+        where: { organizationId, phoneE164: destination.to, optedOut: true },
+      }),
+      this.prisma.optOut.findFirst({
+        where: { organizationId, phoneE164: destination.to },
+      }),
+    ]);
+    if (contact !== null || optedOut !== null) {
       throw sms('recipient_opted_out');
     }
     const rendered = await this.render(organizationId, input);

@@ -22,6 +22,7 @@ import {
   Search,
   Send,
   Settings,
+  ShieldCheck,
   Users,
   Webhook,
   type LucideIcon,
@@ -67,6 +68,13 @@ const NAV: readonly {
   },
   { href: '/docs', label: 'Documentation', group: 'Development', icon: BookOpen },
   { href: '/dashboard/senders', label: 'Senders', group: 'Main', icon: AtSign },
+  {
+    href: '/dashboard/compliance',
+    label: 'Compliance',
+    group: 'Main',
+    icon: ShieldCheck,
+    capability: 'compliance',
+  },
   { href: '/dashboard/users', label: 'Users', group: 'Account', icon: Users },
   { href: '/dashboard/settings', label: 'Settings', group: 'Account', icon: Settings },
   {

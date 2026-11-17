@@ -1,7 +1,17 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { BadgeDollarSign, Building2, Menu, Route, Server } from 'lucide-react';
+import {
+  Activity,
+  BadgeDollarSign,
+  Building2,
+  ClipboardList,
+  Menu,
+  Route,
+  ScrollText,
+  Search,
+  Server,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { type ReactNode, useState } from 'react';
@@ -18,6 +28,11 @@ const LINKS = [
   { href: '/admin/providers', label: 'Providers', icon: Server },
   { href: '/admin/routes', label: 'Routes', icon: Route },
   { href: '/admin/rates', label: 'Rates', icon: BadgeDollarSign },
+  { href: '/admin/reviews', label: 'Reviews', icon: ClipboardList },
+  { href: '/admin/messages', label: 'Messages', icon: Search },
+  { href: '/admin/health', label: 'Health', icon: Activity },
+  { href: '/admin/margin', label: 'Margin', icon: BadgeDollarSign },
+  { href: '/admin/audit', label: 'Audit', icon: ScrollText },
 ] as const;
 
 function current(pathname: string, href: string): boolean {

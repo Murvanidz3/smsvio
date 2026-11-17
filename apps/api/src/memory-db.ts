@@ -417,6 +417,7 @@ export function createMemoryDb() {
   const messages = new Map<string, MessageRow>();
   const messageEvents: MessageEventRow[] = [];
   const billingProfiles = new Map<string, BillingProfileRow>();
+  const compliance = createComplianceMemory();
   const countries = new Map<string, CountryRow>();
   const messaging = createMessagingMemory();
 
@@ -995,8 +996,20 @@ export function createMemoryDb() {
       },
       findUnique: ({ where }: { where: { id: string } }) =>
         Promise.resolve(messages.get(where.id) ?? null),
-      findFirst: ({ where, include }: { where: Where; include?: MessageInclude }) => {
-        const row = [...messages.values()].find((item) => matches(item, where));
+      findFirst: ({
+        where,
+        include,
+        orderBy,
+      }: {
+        where: Where;
+        include?: MessageInclude;
+        orderBy?: { createdAt: 'desc' };
+      }) => {
+        const rows = [...messages.values()].filter((item) => matches(item, where));
+        if (orderBy?.createdAt === 'desc') {
+          rows.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+        }
+        const row = rows[0];
         return Promise.resolve(row === undefined ? null : withMessageInclude(row, include));
       },
       findMany: ({
@@ -1223,6 +1236,7 @@ export function createMemoryDb() {
         return Promise.resolve(existing);
       },
     },
+    ...compliance.delegates,
     ...messaging.delegates,
   };
 
@@ -1625,6 +1639,14 @@ function createMessagingMemory() {
           senderIds.set(row.id, row);
           return Promise.resolve(row);
         },
+        update: ({ where, data }: { where: { id: string }; data: Partial<SenderRow> }) => {
+          const row = senderIds.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing sender ${where.id}`);
+          }
+          Object.assign(row, data, { updatedAt: new Date() });
+          return Promise.resolve(row);
+        },
       },
       orgCountry: {
         findMany: (args?: { where?: Where }) =>
@@ -1945,6 +1967,140 @@ function createMessagingMemory() {
   };
 }
 
+function createComplianceMemory() {
+  const profiles = new Map<string, Record<string, unknown> & { organizationId: string }>();
+  const useCases = new Map<string, Record<string, unknown> & { id: string }>();
+  const documents = new Map<string, Record<string, unknown> & { id: string }>();
+  const replies = new Map<string, Record<string, unknown> & { id: string }>();
+  const optOuts = new Map<
+    string,
+    Record<string, unknown> & { id: string; organizationId: string; phoneE164: string }
+  >();
+
+  return {
+    delegates: {
+      complianceProfile: {
+        findUnique: ({ where }: { where: { organizationId: string } }) =>
+          Promise.resolve(profiles.get(where.organizationId) ?? null),
+        findMany: () => Promise.resolve([...profiles.values()]),
+        upsert: ({
+          where,
+          create,
+          update,
+        }: {
+          where: { organizationId: string };
+          create: Record<string, unknown> & { organizationId: string };
+          update?: Record<string, unknown>;
+        }) => {
+          const existing = profiles.get(where.organizationId);
+          if (existing !== undefined) {
+            Object.assign(existing, update ?? {}, { updatedAt: new Date() });
+            return Promise.resolve(existing);
+          }
+          const row = { ...stamp(), ...create, submittedAt: new Date() };
+          profiles.set(where.organizationId, row);
+          return Promise.resolve(row);
+        },
+        update: ({
+          where,
+          data,
+        }: {
+          where: { organizationId: string };
+          data: Record<string, unknown>;
+        }) => {
+          const existing = profiles.get(where.organizationId);
+          if (existing === undefined) {
+            throw new Error(`missing compliance profile ${where.organizationId}`);
+          }
+          Object.assign(existing, data, { updatedAt: new Date() });
+          return Promise.resolve(existing);
+        },
+      },
+      useCase: {
+        findMany: (args?: { where?: Where; take?: number }) =>
+          Promise.resolve(listed(useCases.values(), args).slice(0, args?.take ?? 50)),
+        findFirst: ({ where }: { where: Where }) =>
+          Promise.resolve([...useCases.values()].find((row) => matches(row, where)) ?? null),
+        create: ({ data }: { data: Record<string, unknown> }) => {
+          const row = { status: 'PENDING', reviewNote: null, ...stamp(), ...data };
+          useCases.set(row.id, row);
+          return Promise.resolve(row);
+        },
+        update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          const row = useCases.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing use case ${where.id}`);
+          }
+          Object.assign(row, data, { updatedAt: new Date() });
+          return Promise.resolve(row);
+        },
+      },
+      complianceDocument: {
+        findMany: (args?: { where?: Where }) => Promise.resolve(listed(documents.values(), args)),
+        findFirst: ({ where }: { where: Where }) =>
+          Promise.resolve([...documents.values()].find((row) => matches(row, where)) ?? null),
+        create: ({ data }: { data: Record<string, unknown> }) => {
+          const row = { ...stamp(), ...data };
+          documents.set(row.id, row);
+          return Promise.resolve(row);
+        },
+      },
+      autoReply: {
+        findMany: (args?: { where?: Where }) => Promise.resolve(listed(replies.values(), args)),
+        create: ({ data }: { data: Record<string, unknown> }) => {
+          const row = { protected: false, ...stamp(), ...data };
+          replies.set(row.id, row);
+          return Promise.resolve(row);
+        },
+        update: ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          const row = replies.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing auto reply ${where.id}`);
+          }
+          Object.assign(row, data, { updatedAt: new Date() });
+          return Promise.resolve(row);
+        },
+        delete: ({ where }: { where: { id: string } }) => {
+          const row = replies.get(where.id);
+          if (row === undefined) {
+            throw new Error(`missing auto reply ${where.id}`);
+          }
+          replies.delete(where.id);
+          return Promise.resolve(row);
+        },
+      },
+      optOut: {
+        findFirst: ({ where }: { where: Where }) =>
+          Promise.resolve([...optOuts.values()].find((row) => matches(row, where)) ?? null),
+        upsert: ({
+          where,
+          create,
+        }: {
+          where: { organizationId_phoneE164: { organizationId: string; phoneE164: string } };
+          create: { organizationId: string; phoneE164: string; source: string };
+          update: { source: string };
+        }) => {
+          const key = `${where.organizationId_phoneE164.organizationId}:${where.organizationId_phoneE164.phoneE164}`;
+          const existing = optOuts.get(key);
+          if (existing !== undefined) {
+            return Promise.resolve(existing);
+          }
+          const row = { ...stamp(), ...create };
+          optOuts.set(key, row);
+          return Promise.resolve(row);
+        },
+        deleteMany: ({ where }: { where: Where }) => {
+          const hits = [...optOuts.entries()].filter(([, row]) => matches(row, where));
+          for (const [key] of hits) {
+            optOuts.delete(key);
+          }
+          return Promise.resolve({ count: hits.length });
+        },
+      },
+    },
+  };
+}
+
 export function createMemoryRedis() {
   const strings = new Map<string, string>();
   const sets = new Map<string, Map<string, number>>();
@@ -1967,6 +2123,8 @@ export function createMemoryRedis() {
       lists.set(key, list);
       return Promise.resolve(list.length);
     },
+    llen: (key: string) => Promise.resolve((lists.get(key) ?? []).length),
+    zcard: (key: string) => Promise.resolve(sets.get(key)?.size ?? 0),
     zadd: (key: string, score: number, member: string) => {
       const set = sets.get(key) ?? new Map<string, number>();
       set.set(member, score);

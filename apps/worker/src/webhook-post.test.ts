@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { postWebhook } from './webhook-post.js';
+import { postCarrier, postWebhook } from './webhook-post.js';
 
 vi.mock('node:dns/promises', () => ({
   lookup: vi.fn(),
@@ -48,6 +48,8 @@ describe('postWebhook', () => {
         response.statusCode = 204;
         response.resume = () => undefined;
         callback(response);
+        response.emit('data', Buffer.from('{"id":"up-1"}'));
+        response.emit('end');
       };
       request.destroy = () => undefined;
       const pinned = options.lookup;
@@ -66,6 +68,39 @@ describe('postWebhook', () => {
       '{}',
     );
     expect(result.status).toBe(204);
+    const carrier = await postCarrier('https://hooks.example.com/sms', {}, '{}');
+    expect(carrier).toEqual({ status: 204, body: '{"id":"up-1"}' });
+  });
+
+  it('destroys the request when the carrier times out', async () => {
+    lookupMock.mockResolvedValue([{ address: '8.8.8.8', family: 4 }] as never);
+    requestMock.mockImplementation(((
+      _options: unknown,
+      callback: (response: EventEmitter) => void,
+    ) => {
+      const request = new EventEmitter() as EventEmitter & {
+        end: () => void;
+        destroy: (error?: Error) => void;
+      };
+      request.destroy = (error) => {
+        request.emit('error', error ?? new Error('closed'));
+      };
+      request.end = () => {
+        request.emit('timeout');
+        callback(new EventEmitter());
+      };
+      return request as never;
+    }) as never);
+    await expect(postCarrier('https://hooks.example.com/sms', {}, '{}')).rejects.toThrow(
+      /timed out/,
+    );
+  });
+
+  it('rejects an empty DNS answer', async () => {
+    lookupMock.mockResolvedValue([] as never);
+    await expect(postWebhook('https://hooks.example.com/sms', {}, '{}')).rejects.toThrow(
+      /not allowed/,
+    );
   });
 
   it('rejects a private address returned by DNS', async () => {

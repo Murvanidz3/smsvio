@@ -4,6 +4,10 @@ import { SessionGuard } from '../accounts/guards.js';
 import { SessionService } from '../accounts/session.service.js';
 import { API_ENV } from '../config.js';
 import { MAILER, createMailer } from '../mail/mailer.js';
+import { ComplianceController } from '../compliance/compliance.controller.js';
+import { ComplianceService } from '../compliance/compliance.service.js';
+import { OperatorController } from '../compliance/operator.controller.js';
+import { OperatorService } from '../compliance/operator.service.js';
 import { AdminController } from './admin.controller.js';
 import { LedgerService } from './ledger.service.js';
 import { OrganizationAdminService } from './organization-admin.service.js';
@@ -21,6 +25,8 @@ import { SenderService } from './senders.service.js';
 @Module({
   controllers: [
     AdminController,
+    ComplianceController,
+    OperatorController,
     SendersController,
     MessagesController,
     ProviderHooksController,
@@ -34,6 +40,8 @@ import { SenderService } from './senders.service.js';
     ProviderAdminService,
     RateAdminService,
     OrganizationAdminService,
+    ComplianceService,
+    OperatorService,
     SenderService,
     SendService,
     MessageQueryService,

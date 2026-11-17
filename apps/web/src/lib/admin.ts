@@ -156,4 +156,39 @@ export const adminApi = {
     mccmnc: string | null;
     price: string;
   }) => api<{ message: string }>('/api/internal/admin/rates/org', { method: 'POST', body }),
+  reviews: () =>
+    api<{
+      verification: { organizationId: string; name: string; legalName: string }[];
+      useCases: { id: string; purpose: string }[];
+      senders: { id: string; value: string }[];
+      templates: { id: string; name: string }[];
+    }>('/api/internal/admin/reviews'),
+  decide: (path: string, id: string, decision: 'approve' | 'reject', note: string) =>
+    api<{ message: string }>(`/api/internal/admin/reviews/${path}/${id}`, {
+      method: 'POST',
+      body: { decision, note },
+    }),
+  system: () =>
+    api<{
+      queues: {
+        send: number;
+        delayed: number;
+        receipts: number;
+        webhooks: number;
+        webhookDelay: number;
+      };
+      receiptLag: number;
+    }>('/api/internal/admin/health'),
+  margin: () =>
+    api<{
+      items: { country: string; providerId: string; revenue: Money; cost: Money; margin: Money }[];
+    }>('/api/internal/admin/margin'),
+  messages: (query: string) =>
+    api<{ total: number; items: { id: string; to: string; status: string; direction: string }[] }>(
+      `/api/internal/admin/messages${query}`,
+    ),
+  audit: (query: string) =>
+    api<{ total: number; items: { id: string; action: string; createdAt: string }[] }>(
+      `/api/internal/admin/audit${query}`,
+    ),
 };

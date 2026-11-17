@@ -20,6 +20,10 @@
       "types": "./dist/provider/index.d.ts",
       "default": "./dist/provider/index.js"
     },
+    "./compliance": {
+      "types": "./dist/compliance/index.d.ts",
+      "default": "./dist/compliance/index.js"
+    },
     "./developer": {
       "types": "./dist/developer/node.d.ts",
       "default": "./dist/developer/node.js"

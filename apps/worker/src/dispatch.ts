@@ -1,11 +1,9 @@
 import type { Prisma, PrismaClient } from '@smsvio/db';
-import { publishCustomerEvent } from '@smsvio/server';
+import { applyInbound, attributeInbound, publishCustomerEvent } from '@smsvio/server';
 import { orderedRoutes } from '@smsvio/shared/billing';
-import {
-  MOCK_CALLBACK_SECRET,
-  MockProvider,
-  type ProviderSendResult,
-} from '@smsvio/shared/provider';
+import { MOCK_CALLBACK_SECRET, type ProviderSendResult } from '@smsvio/shared/provider';
+
+import { drainCarrier, sendThroughProvider } from './carrier.js';
 import {
   CALLBACK_DELAY_KEY,
   MESSAGE_VALIDITY_MS,
@@ -53,9 +51,47 @@ export async function runSendTick(
   await promote(redis, now);
   await deliverCallbacks(redis, now);
   await sendQueued(prisma, redis, now);
+  await collectCarrierEvents(prisma, redis, now);
   await applyReceipts(prisma, redis, now);
   await expireSent(prisma, redis, now);
   await requeueStuck(prisma, redis, now);
+}
+
+async function collectCarrierEvents(
+  prisma: PrismaClient,
+  redis: SendRedis,
+  now: number,
+): Promise<void> {
+  const drained = drainCarrier();
+  for (const receipt of drained.receipts) {
+    if (receipt.providerMessageId === undefined || receipt.receiptStatus === undefined) {
+      continue;
+    }
+    await redis.zadd(
+      RECEIPT_QUEUE_KEY,
+      now,
+      receiptMember(receipt.receiptStatus, receipt.providerMessageId),
+    );
+  }
+  for (const inbound of drained.inbound) {
+    const from = handset(inbound.from);
+    if (from === null) {
+      continue;
+    }
+    const organizationId = await attributeInbound(prisma, from);
+    if (organizationId === null) {
+      continue;
+    }
+    await applyInbound(prisma, redis, organizationId, { from, to: inbound.to, body: inbound.body });
+  }
+}
+
+function handset(value: string): string | null {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length < 8 || digits.length > 15) {
+    return null;
+  }
+  return `+${digits}`;
 }
 
 async function promote(redis: SendRedis, now: number): Promise<void> {
@@ -140,7 +176,10 @@ async function dispatchMessage(
   const candidates = orderedRoutes(
     routes.filter((route) => {
       const provider = providerById.get(route.providerId);
-      return route.enabled && provider?.status === 'ACTIVE' && provider.type === 'MOCK';
+      if (provider?.status !== 'ACTIVE' || !route.enabled) {
+        return false;
+      }
+      return message.billable || provider.type === 'MOCK';
     }),
     message.countryIso2 ?? '',
     message.mccmnc,
@@ -162,16 +201,17 @@ async function dispatchMessage(
       await redis.zadd(SEND_DELAY_KEY, now + 250, id);
       return;
     }
-    const mock = new MockProvider({
-      code: provider.code,
-      callbackSecretHash: provider.callbackSecretHash,
-    });
-    const result = await mock.send({
-      to: message.to,
-      from: message.fromSender,
-      body: message.body,
-      encoding: message.encoding,
-      segments: message.segments,
+    const result = await sendThroughProvider({
+      provider,
+      request: {
+        to: message.to,
+        from: message.fromSender,
+        body: message.body,
+        encoding: message.encoding,
+        segments: message.segments,
+      },
+      billable: message.billable,
+      encryptionKey: process.env.APP_ENCRYPTION_KEY,
     });
     if (result.status === 'accepted') {
       await markSent(prisma, redis, message, route.id, provider.id, route.costMicros, result, now);
@@ -235,11 +275,13 @@ async function markSent(
       await emitBilling(prisma, redis, message, 'billing.charged', price);
     }
   }
-  await redis.zadd(
-    CALLBACK_DELAY_KEY,
-    now + result.receipt.delayMs,
-    JSON.stringify({ id: result.providerMessageId, status: result.receipt.status }),
-  );
+  if (result.receipt !== undefined) {
+    await redis.zadd(
+      CALLBACK_DELAY_KEY,
+      now + result.receipt.delayMs,
+      JSON.stringify({ id: result.providerMessageId, status: result.receipt.status }),
+    );
+  }
 }
 
 async function deliverCallbacks(redis: SendRedis, now: number): Promise<void> {

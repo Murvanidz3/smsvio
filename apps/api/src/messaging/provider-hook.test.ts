@@ -76,4 +76,96 @@ describe('provider callbacks', () => {
       'undelivered:mock_2',
     );
   });
+
+  it('accepts an HTTP receipt and stores a signed inbound message', async () => {
+    const db = createMemoryDb();
+    await db.provider.create({
+      data: {
+        code: 'upstream',
+        type: 'HTTP',
+        status: 'ACTIVE',
+        maxTps: 10,
+        markupPercent: 0,
+        configEnc: null,
+        callbackSecretHash: hashProviderSecret('hook-secret'),
+      },
+    });
+    await db.provider.create({
+      data: {
+        code: 'smsc',
+        type: 'SMPP',
+        status: 'ACTIVE',
+        maxTps: 10,
+        markupPercent: 0,
+        configEnc: null,
+        callbackSecretHash: null,
+      },
+    });
+    await db.message.create({
+      data: {
+        organizationId: 'org-http',
+        direction: 'OUTBOUND',
+        to: '+491511112233',
+        body: 'Hello',
+        status: 'SENT',
+      },
+    });
+    const queued: string[] = [];
+    const cache = {
+      zadd: () => Promise.resolve(1),
+      lpush: (_key: string, value: string) => {
+        queued.push(value);
+        return Promise.resolve(1);
+      },
+    };
+    await expect(
+      acceptProviderCallback(
+        db as never,
+        cache,
+        'upstream',
+        {
+          headers: { 'X-SMSVIO-Signature': 'hook-secret' },
+          body: { id: 'up-9', status: 'DELIVRD', from: '491511112233', to: 'SMSVIO', body: 'STOP' },
+        },
+        20,
+      ),
+    ).resolves.toBe(1);
+    expect(queued.length).toBeGreaterThan(0);
+    await expect(
+      acceptProviderCallback(
+        db as never,
+        cache,
+        'upstream',
+        { headers: { 'x-smsvio-signature': 'nope' }, body: { id: 'up-9', status: 'DELIVRD' } },
+        21,
+      ),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      acceptProviderCallback(db as never, cache, 'smsc', { headers: {}, body: {} }, 22),
+    ).rejects.toMatchObject({ status: 404 });
+    process.env.APP_ENCRYPTION_KEY = 'ab'.repeat(32);
+    await db.provider.update({
+      where: { id: (await db.provider.findMany({ where: { code: 'upstream' } }))[0]?.id ?? '' },
+      data: { configEnc: 'not-ciphertext' },
+    });
+    await expect(
+      acceptProviderCallback(
+        db as never,
+        cache,
+        'upstream',
+        { headers: { 'x-smsvio-signature': 'hook-secret' }, body: { id: 'up-10', status: 'NOPE' } },
+        23,
+      ),
+    ).resolves.toBe(0);
+    delete process.env.APP_ENCRYPTION_KEY;
+    await expect(
+      acceptProviderCallback(
+        db as never,
+        cache,
+        'upstream',
+        { headers: { 'x-smsvio-signature': 'hook-secret' }, body: null },
+        24,
+      ),
+    ).resolves.toBe(0);
+  });
 });
