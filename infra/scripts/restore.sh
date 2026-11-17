@@ -30,4 +30,5 @@ set +e
 status=$?
 set -e
 "$SCRIPT_DIR/compose.sh" start api worker
+cleanup
 exit "$status"

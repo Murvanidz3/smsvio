@@ -12,6 +12,17 @@ export interface RateLimitDecision {
   readonly remaining: number;
 }
 
+/**
+ * Playwright signs the same demo account in once per project. The product limits stay as written
+ * unless the end-to-end harness sets this flag on a test process.
+ */
+export function scaledLimit(limit: number): number {
+  if (process.env.NODE_ENV === 'test' && process.env.E2E_RELAX_RATE_LIMITS === '1') {
+    return limit * 10;
+  }
+  return limit;
+}
+
 export function decideRateLimit(
   count: number,
   limit: number,
@@ -66,7 +77,7 @@ export class RateLimiter {
   }
 
   async enforce(key: string, limit: number, windowMs: number): Promise<void> {
-    const decision = await this.hit(key, limit, windowMs);
+    const decision = await this.hit(key, scaledLimit(limit), windowMs);
     if (!decision.allowed) {
       throw new ApiError(
         429,

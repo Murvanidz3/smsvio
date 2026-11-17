@@ -556,3 +556,8 @@ and cards inverted. SMSVIO keeps its own name, mark, and wording.
   was added.
 - Checkout stays 503 `payments_unconfigured`. The Phase 7 handset test stays not run.
   `AUTO_APPROVE_TEMPLATES` stays `false` in the repository.
+- CI on `dcd2004` did not deploy. Shellcheck treated the restore cleanup, which only runs from the
+  EXIT trap, as unreachable, so `restore.sh` now calls it before exiting. Playwright signed the
+  demo account in once per project and passed the 20-attempt sign-in limit. The end-to-end
+  process sets `E2E_RELAX_RATE_LIMITS=1` with `NODE_ENV=test`, which multiplies auth limits by
+  ten. Production does not set that flag.

@@ -11,7 +11,7 @@ import { createMailer, emailSubject, renderMessage } from '../mail/mailer.js';
 import { hashPassword, verifyPassword } from './passwords.js';
 import { applySessionCookies, clearAuthCookies, cookieSecure } from './cookies.js';
 import { decryptString, encryptString } from './encryption.js';
-import { decideRateLimit, RateLimiter } from './rate-limit.js';
+import { decideRateLimit, RateLimiter, scaledLimit } from './rate-limit.js';
 import { hashToken, randomCode, randomToken, tokensEqual } from './tokens.js';
 
 const KEY = 'ab'.repeat(32);
@@ -59,6 +59,31 @@ describe('cookies', () => {
 });
 
 describe('rate limits', () => {
+  it('keeps the product limit unless the end-to-end harness asks for room', () => {
+    const previousNode = process.env.NODE_ENV;
+    const previousFlag = process.env.E2E_RELAX_RATE_LIMITS;
+    try {
+      process.env.NODE_ENV = 'production';
+      delete process.env.E2E_RELAX_RATE_LIMITS;
+      expect(scaledLimit(20)).toBe(20);
+      process.env.NODE_ENV = 'test';
+      expect(scaledLimit(20)).toBe(20);
+      process.env.E2E_RELAX_RATE_LIMITS = '1';
+      expect(scaledLimit(20)).toBe(200);
+    } finally {
+      if (previousNode === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNode;
+      }
+      if (previousFlag === undefined) {
+        delete process.env.E2E_RELAX_RATE_LIMITS;
+      } else {
+        process.env.E2E_RELAX_RATE_LIMITS = previousFlag;
+      }
+    }
+  });
+
   it('computes a retry delay from the oldest hit', () => {
     expect(decideRateLimit(1, 2, null, 1_000, 60_000)).toEqual({
       allowed: true,
