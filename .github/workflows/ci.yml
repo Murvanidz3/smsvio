@@ -136,13 +136,6 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report
           retention-days: 7
-      - name: Upload marketing review screenshots
-        if: success()
-        uses: actions/upload-artifact@v7
-        with:
-          name: marketing-screenshots
-          path: apps/web/test-results/marketing
-          retention-days: 14
 
   compose-smoke:
     name: Fresh clone runs with docker compose
