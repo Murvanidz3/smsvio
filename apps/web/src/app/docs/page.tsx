@@ -15,7 +15,7 @@ export default function DocsPage() {
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-8 px-4 py-8 sm:px-6">
       <header className="flex items-center justify-between gap-3">
-        <Link href="/signin" aria-label="SMSVIO home">
+        <Link href="/" aria-label="SMSVIO home">
           <Logo />
         </Link>
         <div className="flex items-center gap-2">

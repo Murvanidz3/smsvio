@@ -1,11 +1,13 @@
 import { expect, test } from './fixtures';
 
 test.describe('front door', () => {
-  test('sends the root path to sign in', async ({ page }) => {
+  test('shows a coming soon page and stays there', async ({ page }) => {
     const response = await page.goto('/');
     expect(response?.status()).toBe(200);
-    await expect(page).toHaveURL('/signin');
-    await expect(page).toHaveTitle('Sign in · SMSVIO');
+    await expect(page).toHaveURL('/');
+    await expect(page).toHaveTitle('Coming soon · SMSVIO');
+    await expect(page.getByRole('heading', { name: 'Coming soon' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in' })).toHaveCount(0);
   });
 });
 
@@ -33,7 +35,7 @@ test.describe('sign-in shell', () => {
       'noindex, nofollow',
     );
     await page.getByRole('link', { name: 'SMSVIO home' }).click();
-    await expect(page).toHaveURL('/signin');
+    await expect(page).toHaveURL('/');
   });
 });
 

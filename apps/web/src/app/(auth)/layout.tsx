@@ -8,7 +8,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex items-center justify-between px-4 py-5 sm:px-6">
-        <Link href="/signin" aria-label="SMSVIO home" className="rounded-md">
+        <Link href="/" aria-label="SMSVIO home" className="rounded-md">
           <Logo />
         </Link>
         <ThemeToggle />
