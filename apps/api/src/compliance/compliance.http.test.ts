@@ -143,6 +143,18 @@ describe('compliance and the operator queue', () => {
         dataBase64: Buffer.from('license').toString('base64'),
       })
       .expect(201);
+    await owner
+      .post('/api/internal/compliance/documents')
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', csrf)
+      .send({
+        countryIso2: 'GE',
+        kind: 'license',
+        filename: 'fake.png',
+        contentType: 'image/png',
+        dataBase64: Buffer.from('not a png').toString('base64'),
+      })
+      .expect(400);
     const downloaded = await owner
       .get(`/api/internal/compliance/documents/${String(document.body.id)}`)
       .expect(200);
@@ -253,6 +265,10 @@ describe('compliance and the operator queue', () => {
     await owner.get('/api/internal/admin/messages?q=4915').expect(200);
     const audit = await owner.get('/api/internal/admin/audit').expect(200);
     expect(audit.body.total).toBeGreaterThan(0);
+    const exported = await owner.get('/api/internal/organization/export').expect(200);
+    expect(exported.headers['content-disposition']).toContain('smsvio-export.json');
+    expect(exported.body.organization.name).toBe('Compliance Org');
+    expect(exported.body.messagesTruncated).toBe(false);
 
     await db.optOut.upsert({
       where: { organizationId_phoneE164: { organizationId, phoneE164: '+4915123456789' } },

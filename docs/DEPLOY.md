@@ -301,30 +301,39 @@ previous release (add columns and tables first, remove them in a later release).
 
 ## 4. Backups and restore
 
-**Not configured yet.** Automated nightly encrypted backups (spec section 13.4) were deferred by
-the product owner until after the build; see `docs/DECISIONS.md`. Until then, take a manual
-dump before risky changes:
+`infra/scripts/backup.sh` writes an encrypted custom-format dump. `infra/scripts/restore.sh`
+replaces the live database with one of those dumps. The CI deploy key is not allowed to copy
+these two scripts. Copy them once with an admin login, next to `compose.sh`:
+
+```bash
+scp infra/scripts/backup.sh infra/scripts/restore.sh smsvio:/opt/smsvio/scripts/
+ssh smsvio 'chmod 0755 /opt/smsvio/scripts/backup.sh /opt/smsvio/scripts/restore.sh'
+```
+
+`BACKUP_PASSPHRASE` is read only by these scripts. Do not put it in `/opt/smsvio/.env`. That file
+is passed into the containers, and the passphrase is not an application setting. A missing
+passphrase makes the script exit. Compose still boots without it.
+
+Nightly backup, 14 days on disk (`KEEP_DAYS`, default 14). The directory is mode 700 and each
+file is mode 600. Set `BACKUP_S3_URI` (for example `s3://bucket/smsvio`) only after the owner
+names a bucket and the host `aws` CLI can write there. With the variable unset, nothing is
+uploaded.
+
+```cron
+15 3 * * * root BACKUP_PASSPHRASE='replace-me' /opt/smsvio/scripts/backup.sh >> /var/log/smsvio-backup.log 2>&1
+```
+
+Restore replaces every row. Stop happens inside the script. This was not drilled on this
+machine: there is no local Postgres, and running it on production would wipe the live database.
 
 ```bash
 ssh smsvio
-cd /opt/smsvio
-mkdir -p backups && chmod 700 backups
-./scripts/compose.sh exec -T postgres pg_dump -U smsvio -d smsvio --format=custom \
-  > "backups/smsvio-$(date -u +%Y%m%dT%H%M%SZ).dump"
-```
-
-Restore a dump (this replaces the current data; stop the writers first):
-
-```bash
-./scripts/compose.sh stop api worker
-./scripts/compose.sh exec -T postgres pg_restore -U smsvio -d smsvio --clean --if-exists \
-  < backups/<file>.dump
-./scripts/compose.sh start api worker
+BACKUP_PASSPHRASE='replace-me' /opt/smsvio/scripts/restore.sh /opt/smsvio/backups/smsvio-<stamp>.dump.enc --yes
 curl -fsS https://smsvio.com/readyz
 ```
 
-Copy dumps off the server (`scp smsvio:/opt/smsvio/backups/<file>.dump .`); a backup that only
-lives on the same disk is not a backup.
+A backup that only lives on the same disk is not a backup. Copy `smsvio-*.dump.enc` off the
+server, or set `BACKUP_S3_URI` once a bucket exists.
 
 ## 5. Rotating secrets
 

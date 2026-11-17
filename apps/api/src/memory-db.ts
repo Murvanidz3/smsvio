@@ -2070,6 +2070,7 @@ function createComplianceMemory() {
         },
       },
       optOut: {
+        findMany: (args?: { where?: Where }) => Promise.resolve(listed(optOuts.values(), args)),
         findFirst: ({ where }: { where: Where }) =>
           Promise.resolve([...optOuts.values()].find((row) => matches(row, where)) ?? null),
         upsert: ({

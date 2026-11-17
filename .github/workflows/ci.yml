@@ -35,6 +35,8 @@ jobs:
         run: pnpm typecheck
       - name: Unit tests with coverage thresholds
         run: pnpm test
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
       - name: Build
         run: pnpm build
 

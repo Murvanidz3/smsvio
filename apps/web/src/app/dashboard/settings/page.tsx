@@ -60,6 +60,21 @@ function message(error: unknown): string {
   return error instanceof ApiError ? error.message : 'Something went wrong.';
 }
 
+async function downloadExport(toast: (text: string) => void): Promise<void> {
+  const response = await fetch('/api/internal/organization/export', { credentials: 'same-origin' });
+  if (!response.ok) {
+    toast('Could not download the export.');
+    return;
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'smsvio-export.json';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function ProfileTab() {
   const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
   const queryClient = useQueryClient();
@@ -459,6 +474,24 @@ function BusinessTab({ isOwner }: { isOwner: boolean }) {
         />
         <Button type="submit">Save business details</Button>
       </form>
+      {isOwner ? (
+        <div className="grid gap-3">
+          <h2 className="font-semibold">Your data</h2>
+          <p className="text-muted-foreground text-sm">
+            Download a JSON copy of this organization. Message bodies past the retention window are
+            already removed. The file omits passwords, API keys, and webhook secrets.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              void downloadExport(toast);
+            }}
+          >
+            Download export
+          </Button>
+        </div>
+      ) : null}
       {isOwner ? (
         <form
           className="grid gap-3"

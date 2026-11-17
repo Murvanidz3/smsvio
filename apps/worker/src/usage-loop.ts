@@ -12,6 +12,7 @@ import { PRISMA } from '@smsvio/server';
 import nodemailer from 'nodemailer';
 
 import { WORKER_ENV, type WorkerEnv } from './env.js';
+import { redactExpiredBodies } from './retention-pass.js';
 import { notifyLowBalances, refreshUsage, type UsageMail } from './usage-pass.js';
 
 /** Stores daily usage and sends low-balance notices. A pass that is still running is left to finish. */
@@ -50,6 +51,14 @@ export class UsageLoop implements OnApplicationBootstrap, OnApplicationShutdown 
       });
     } catch (error) {
       this.logger.error(`Usage pass failed: ${errorMessage(error)}`);
+    }
+    try {
+      const redacted = await redactExpiredBodies(this.prisma);
+      if (redacted > 0) {
+        this.logger.log(`Redacted ${String(redacted)} message bodies past retention.`);
+      }
+    } catch (error) {
+      this.logger.error(`Retention pass failed: ${errorMessage(error)}`);
     } finally {
       this.running = false;
     }

@@ -168,6 +168,9 @@ export class ComplianceService {
     if (bytes.length === 0 || bytes.length > MAX_DOCUMENT_BYTES) {
       throw validation({ dataBase64: 'Upload a file up to 512 KB.' });
     }
+    if (!documentMatches(input.contentType, bytes)) {
+      throw validation({ dataBase64: 'That file does not match its declared type.' });
+    }
     const created = await this.prisma.complianceDocument.create({
       data: {
         organizationId: state.organizationId,
@@ -308,6 +311,27 @@ export class ComplianceService {
       });
     }
   }
+}
+
+export function documentMatches(contentType: string, bytes: Buffer): boolean {
+  if (contentType === 'application/pdf') {
+    return bytes.subarray(0, 4).toString('ascii') === '%PDF';
+  }
+  if (contentType === 'image/png') {
+    return bytes
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  }
+  if (contentType === 'image/jpeg') {
+    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  if (contentType === 'image/webp') {
+    return (
+      bytes.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      bytes.subarray(8, 12).toString('ascii') === 'WEBP'
+    );
+  }
+  return contentType === 'text/plain' && !bytes.includes(0);
 }
 
 function blank(value: string | undefined): string | null {

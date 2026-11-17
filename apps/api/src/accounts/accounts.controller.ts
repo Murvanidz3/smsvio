@@ -438,6 +438,15 @@ export class AccountController {
     return session;
   }
 
+  @Get('organization/export')
+  async exportOrganization(
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    reply.header('content-disposition', 'attachment; filename="smsvio-export.json"');
+    return this.teams.exportOrganization(current(request), clientInfo(request));
+  }
+
   @Post('organization/delete')
   @HttpCode(200)
   async deleteOrganization(

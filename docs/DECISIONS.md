@@ -524,3 +524,35 @@ and cards inverted. SMSVIO keeps its own name, mark, and wording.
   to that handset. If none did, the message is ignored. SMPP `deliver_sm` without the receipt
   flag is inbound. An HTTP body with `from`, `to`, and `body` is inbound. Unknown provider types
   still 404. The mock path is unchanged.
+
+## Phase 8 — Hardening (2026-11-17)
+
+- The usage pass redacts `message.body` to `[redacted]` once `createdAt` is older than
+  `messageRetentionDays` (default 365). A value below 1 skips that organization. Templates are
+  left as written. The retention pass has its own try/catch, so a retention failure does not
+  change the usage-failure log.
+- The owner downloads `GET /api/internal/organization/export` (`organization.exported` in the
+  audit log). The file is `smsvio-export.json`. It stops at 10,000 messages, contacts, and
+  templates and sets `messagesTruncated` when older messages remain. Password hashes, API key
+  hashes, webhook secrets, TOTP secrets, and document ciphertext are omitted.
+- Compliance uploads are sniffed. A declared PNG, JPEG, WEBP, or PDF that does not start with
+  that format is rejected, and a text file with a NUL byte is rejected. The Phase 6 limits stay:
+  512 KB, those types plus `text/plain`, ciphertext in Postgres under `APP_ENCRYPTION_KEY`. Spec
+  section 11's 10 MB store outside the web root was not adopted.
+- Automatic pause on a prefix spike stays off. Spec section 11 asks for it, and no threshold was
+  supplied. No number was invented.
+- The admin audit list orders every organization by `createdAt` descending. Migration
+  `20261117180000_audit_created_at` adds `audit_logs_createdAt_idx` for that order. Message list
+  indexes were already present. A million-row timing run was not performed, and `pg_trgm` was
+  not added for the contains search.
+- Log redaction now includes `*.body`, `*.phone`, and `*.phoneE164`. Query strings were already
+  stripped.
+- `infra/scripts/backup.sh` and `restore.sh` encrypt a custom-format dump with
+  `BACKUP_PASSPHRASE`, keep 14 days, and copy to S3 only when `BACKUP_S3_URI` is set. The
+  passphrase is not an application variable and Compose boots without it. The restore drill was
+  not run: this machine has no Postgres, and a restore on the server would replace production.
+- CI runs `pnpm audit --audit-level=high`. One moderate `minimatch` advisory remains, pulled in
+  by typescript-eslint (`GHSA-g3hv-75wg-m249`). It is not a runtime dependency, and no override
+  was added.
+- Checkout stays 503 `payments_unconfigured`. The Phase 7 handset test stays not run.
+  `AUTO_APPROVE_TEMPLATES` stays `false` in the repository.

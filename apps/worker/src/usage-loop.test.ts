@@ -31,6 +31,7 @@ describe('usage loop', () => {
     );
     await loop.tick();
     expect(errorSpy).toHaveBeenCalledWith('Usage pass failed: down');
+    expect(errorSpy).toHaveBeenCalledWith('Retention pass failed: down');
     loop.onApplicationShutdown();
   });
 
@@ -51,6 +52,27 @@ describe('usage loop', () => {
     expect(started).toBe(1);
     release();
     await first;
+    loop.onApplicationShutdown();
+  });
+
+  it('logs how many bodies were redacted', async () => {
+    const logSpy = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    const loop = new UsageLoop(
+      {
+        organization: {
+          findMany: () => Promise.resolve([{ id: 'org-1', messageRetentionDays: 30 }]),
+        },
+        message: {
+          findMany: () => Promise.resolve([]),
+          updateMany: () => Promise.resolve({ count: 2 }),
+        },
+        dailyUsage: { upsert: () => Promise.resolve({}) },
+        billingProfile: { findMany: () => Promise.resolve([]) },
+      } as never,
+      env as never,
+    );
+    await loop.tick();
+    expect(logSpy).toHaveBeenCalledWith('Redacted 2 message bodies past retention.');
     loop.onApplicationShutdown();
   });
 

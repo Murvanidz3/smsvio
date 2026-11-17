@@ -634,6 +634,87 @@ export class TeamService {
     return invitation;
   }
 
+  async exportOrganization(state: AuthState, client: ClientInfo) {
+    assertCapability(state, 'own');
+    const organizationId = state.organizationId;
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+    if (organization === null) {
+      throw new ApiError(404, 'not_found', 'That organization does not exist.');
+    }
+    const [members, contacts, templates, messages, messageCount, senders, optOuts] =
+      await Promise.all([
+        this.prisma.membership.findMany({
+          where: { organizationId },
+          include: { user: { select: { email: true, name: true } } },
+        }),
+        this.prisma.contact.findMany({
+          where: { organizationId },
+          orderBy: { createdAt: 'desc' },
+          take: 10_000,
+        }),
+        this.prisma.template.findMany({
+          where: { organizationId },
+          orderBy: { createdAt: 'desc' },
+          take: 10_000,
+        }),
+        this.prisma.message.findMany({
+          where: { organizationId },
+          orderBy: { createdAt: 'desc' },
+          take: 10_000,
+          select: {
+            id: true,
+            direction: true,
+            to: true,
+            fromSender: true,
+            body: true,
+            status: true,
+            createdAt: true,
+          },
+        }),
+        this.prisma.message.count({ where: { organizationId } }),
+        this.prisma.senderId.findMany({ where: { organizationId } }),
+        this.prisma.optOut.findMany({ where: { organizationId } }),
+      ]);
+    await writeAudit(this.prisma, {
+      organizationId,
+      actorUserId: state.userId,
+      action: 'organization.exported',
+      targetType: 'organization',
+      targetId: organizationId,
+      ip: client.ip,
+    });
+    return {
+      exportedAt: new Date().toISOString(),
+      organization: {
+        id: organization.id,
+        name: organization.name,
+        legalName: organization.legalName,
+        status: organization.status,
+        timezone: organization.timezone,
+        messageRetentionDays: organization.messageRetentionDays,
+        createdAt: organization.createdAt.toISOString(),
+      },
+      members: members.map((member) => ({
+        email: member.user.email,
+        name: member.user.name,
+        role: member.role,
+        status: member.status,
+      })),
+      contacts,
+      templates,
+      messages,
+      messagesTruncated: messageCount > messages.length,
+      senders: senders.map((sender) => ({
+        value: sender.value,
+        type: sender.type,
+        status: sender.status,
+      })),
+      optOuts: optOuts.map((row) => ({ phoneE164: row.phoneE164, source: row.source })),
+    };
+  }
+
   private async present(
     userId: string,
     sessionId: string,
