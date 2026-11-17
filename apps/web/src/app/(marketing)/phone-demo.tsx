@@ -62,17 +62,30 @@ export function PhoneDemo({ countries }: { countries: readonly MarketingCountry[
             <p className="mkt-phone-empty">Your message appears here.</p>
           ) : (
             <div className="mkt-thread">
-              <p className="mkt-bubble">{preview}</p>
+              <p className="mkt-sender" aria-hidden>
+                SMSVIO
+              </p>
+              <p className="mkt-bubble" key={preview}>
+                {preview}
+              </p>
               {label === null ? null : (
                 <p
                   className={delivery === 'delivered' ? 'mkt-status is-delivered' : 'mkt-status'}
                   data-testid="delivery-status"
                 >
+                  <span className="mkt-ticks" aria-hidden>
+                    <i data-on="true" />
+                    <i
+                      data-on={delivery === 'sent' || delivery === 'delivered' ? 'true' : 'false'}
+                    />
+                    <i data-on={delivery === 'delivered' ? 'true' : 'false'} />
+                  </span>
                   {label}
                 </p>
               )}
             </div>
           )}
+          <span className="mkt-home" aria-hidden />
         </div>
       </div>
       <form

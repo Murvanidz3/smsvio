@@ -37,6 +37,11 @@ export default async function MarketingLayout({ children }: { children: ReactNod
 
   return (
     <div className={`mkt ${display.variable} ${sans.variable} ${mono.variable}`} data-marketing="">
+      <div className="mkt-atmosphere" aria-hidden>
+        <span className="mkt-orb mkt-orb-a" />
+        <span className="mkt-orb mkt-orb-b" />
+        <span className="mkt-orb mkt-orb-c" />
+      </div>
       <MarketingTone />
       <a className="mkt-skip" href="#content">
         Skip to content
