@@ -32,6 +32,12 @@ function authRedirect(
   path: string,
   session: string | undefined,
 ): NextResponse | null {
+  if (path === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = session !== undefined ? '/dashboard' : '/signin';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
   const needsSession = path.startsWith('/dashboard') || path.startsWith('/admin');
   if (needsSession && session === undefined) {
     const url = request.nextUrl.clone();

@@ -1,32 +1,11 @@
 import { expect, test } from './fixtures';
 
-test.describe('landing page', () => {
-  test('shows the marketing hero and links home to sign in', async ({ page }) => {
+test.describe('front door', () => {
+  test('sends the root path to sign in', async ({ page }) => {
     const response = await page.goto('/');
     expect(response?.status()).toBe(200);
-
-    await expect(page).toHaveTitle('SMSVIO — Send SMS anywhere');
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'SMSVIO home' }).first()).toBeVisible();
-    await page.getByRole('link', { name: 'SMSVIO home' }).first().click();
-    await expect(page).toHaveURL('/');
-  });
-
-  test('stays on the ivory surface in either colour scheme', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.getByTestId('theme-toggle')).toHaveCount(0);
-    const background = await page
-      .locator('[data-marketing]')
-      .evaluate((element) => getComputedStyle(element).backgroundColor);
-    expect(background).toBe('rgb(250, 249, 246)');
-  });
-
-  test('fits the viewport without horizontal scrolling', async ({ page }) => {
-    await page.goto('/');
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expect(page).toHaveURL('/signin');
+    await expect(page).toHaveTitle('Sign in · SMSVIO');
   });
 });
 
@@ -54,7 +33,7 @@ test.describe('sign-in shell', () => {
       'noindex, nofollow',
     );
     await page.getByRole('link', { name: 'SMSVIO home' }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/signin');
   });
 });
 
