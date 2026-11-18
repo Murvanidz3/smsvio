@@ -158,7 +158,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <Menu aria-hidden />
           </Button>
           <Link href="/dashboard" aria-label="SMSVIO home" className="md:hidden">
-            <Logo />
+            <Logo className="max-sm:[&>span:last-child]:hidden" />
           </Link>
           <button
             type="button"
@@ -201,7 +201,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {data?.user.isPlatformAdmin === true ? (
               <Link
                 href="/admin"
-                className="bg-primary text-primary-foreground hidden h-10 items-center rounded-full px-5 text-sm font-medium sm:inline-flex"
+                className="bg-primary text-primary-foreground inline-flex h-10 items-center rounded-full px-4 text-sm font-medium sm:px-5"
               >
                 Admin
               </Link>
@@ -320,7 +320,7 @@ function OrgSwitcher({ session }: { session: SessionResponse }) {
     <label className="text-sm">
       <span className="sr-only">Organization</span>
       <select
-        className="border-input bg-muted h-10 max-w-40 rounded-full border px-4 text-sm font-medium sm:max-w-none"
+        className="border-input bg-muted h-10 max-w-32 rounded-full border px-4 text-sm font-medium sm:max-w-none"
         value={session.organization.id}
         onChange={(event) => {
           void accountApi.switchOrganization(event.target.value).then(async () => {
