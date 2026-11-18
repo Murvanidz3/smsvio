@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 
 import type { MessagePreview } from '@/lib/messages';
 
+const DASH = '\u2014';
+
 function segmentLimit(encoding: string, segments: number): number {
   if (encoding === 'UCS-2') {
     return segments > 1 ? 67 : 70;
@@ -10,89 +12,115 @@ function segmentLimit(encoding: string, segments: number): number {
   return segments > 1 ? 153 : 160;
 }
 
-function Stat({ label, value, loading }: { label: string; value: string; loading: boolean }) {
+function Tile({
+  label,
+  value,
+  note,
+  tone,
+  loading,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  tone: string;
+  loading: boolean;
+}) {
   return (
-    <div className="bg-muted/60 rounded-xl px-3 py-2.5">
-      <dt className="text-muted-foreground text-xs">{label}</dt>
+    <div className={cn('rounded-2xl p-5', tone)}>
+      <dt className="text-muted-foreground text-sm font-medium">{label}</dt>
       <dd
         className={cn(
-          'mt-0.5 truncate text-base font-semibold tabular-nums',
-          loading && 'bg-muted-foreground/20 h-6 w-14 animate-pulse rounded-md text-transparent',
+          'text-foreground mt-2 truncate text-3xl font-bold tracking-tight tabular-nums',
+          loading && 'bg-foreground/10 h-9 w-20 animate-pulse rounded-lg text-transparent',
         )}
       >
         {value}
       </dd>
+      <p className="text-muted-foreground mt-1 truncate text-xs">{note}</p>
     </div>
+  );
+}
+
+export function Tiles({
+  preview,
+  loading,
+  recipients,
+}: {
+  preview: MessagePreview | undefined;
+  loading: boolean;
+  recipients: number;
+}) {
+  const segments = preview?.segments ?? 0;
+  const characters = preview === undefined ? 0 : Array.from(preview.body).length;
+  const limit = preview === undefined ? 0 : segmentLimit(preview.encoding, segments);
+  const unicode = preview?.encoding === 'UCS-2';
+  return (
+    <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <Tile
+        label="Recipients"
+        value={String(recipients)}
+        note={recipients === 0 ? 'Add a number or contact' : 'One message per send'}
+        tone="bg-teal"
+        loading={false}
+      />
+      <Tile
+        label="Encoding"
+        value={preview?.encoding ?? DASH}
+        note={
+          preview === undefined
+            ? 'Known once ready'
+            : unicode
+              ? 'Unicode, shorter segments'
+              : 'Standard characters'
+        }
+        tone="bg-mint"
+        loading={loading}
+      />
+      <Tile
+        label={segments === 1 ? 'Segment' : 'Segments'}
+        value={preview === undefined ? DASH : String(segments)}
+        note={preview === undefined ? 'Known once ready' : `Up to ${String(limit)} characters each`}
+        tone="bg-lavender"
+        loading={loading}
+      />
+      <Tile
+        label="Characters"
+        value={preview === undefined ? DASH : String(characters)}
+        note={
+          preview === undefined
+            ? 'Known once ready'
+            : `${String(Math.max(0, limit * segments - characters))} left in this segment count`
+        }
+        tone="bg-peach"
+        loading={loading}
+      />
+    </dl>
   );
 }
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 py-2 text-sm">
+    <div className="flex items-baseline justify-between gap-3 py-3 text-sm">
       <dt className="text-muted-foreground shrink-0">{label}</dt>
-      <dd className="min-w-0 truncate text-right font-medium">{value}</dd>
+      <dd className="min-w-0 truncate text-right font-semibold">{value}</dd>
     </div>
   );
 }
 
-export function Summary({
+export function Details({
   preview,
-  loading,
-  recipients,
   templateName,
   senderLabel,
-  caption,
 }: {
   preview: MessagePreview | undefined;
-  loading: boolean;
-  recipients: number;
   templateName: string;
   senderLabel: string;
-  caption: string;
 }) {
-  const segments = preview?.segments ?? 0;
-  const characters = preview === undefined ? 0 : Array.from(preview.body).length;
-  const limit = preview === undefined ? 0 : segmentLimit(preview.encoding, segments);
-  const dash = '\u2014';
   return (
-    <div className="grid gap-3">
-      <dl className="grid grid-cols-3 gap-2">
-        <Stat label="Encoding" value={preview?.encoding ?? dash} loading={loading} />
-        <Stat
-          label={segments === 1 ? 'Segment' : 'Segments'}
-          value={preview === undefined ? dash : String(segments)}
-          loading={loading}
-        />
-        <Stat
-          label="Cost (USD)"
-          value={preview === undefined ? dash : preview.price.display}
-          loading={loading}
-        />
-      </dl>
-      {preview === undefined ? null : (
-        <div className="grid gap-1.5">
-          <div
-            role="img"
-            aria-label={`${String(segments)} of up to 10 segments`}
-            className="flex gap-1"
-          >
-            {Array.from({ length: Math.min(Math.max(segments, 1), 10) }, (_, index) => (
-              <span key={index} className="bg-primary h-1.5 flex-1 rounded-full" />
-            ))}
-          </div>
-          <p className="text-muted-foreground text-xs tabular-nums">
-            {String(characters)} {characters === 1 ? 'character' : 'characters'} · up to{' '}
-            {String(limit)} per segment
-          </p>
-        </div>
-      )}
-      <dl className="divide-y border-t">
-        <Row label="Recipients" value={String(recipients)} />
-        <Row label="Template" value={templateName === '' ? dash : templateName} />
-        <Row label="From" value={preview?.from ?? (senderLabel === '' ? dash : senderLabel)} />
-        <Row label="Country" value={preview?.countryIso2 ?? dash} />
-      </dl>
-      <p className="text-muted-foreground text-xs">{caption}</p>
-    </div>
+    <dl className="divide-y border-t">
+      <Row label="Template" value={templateName === '' ? DASH : templateName} />
+      <Row label="From" value={preview?.from ?? (senderLabel === '' ? DASH : senderLabel)} />
+      <Row label="Country" value={preview?.countryIso2 ?? DASH} />
+    </dl>
   );
 }

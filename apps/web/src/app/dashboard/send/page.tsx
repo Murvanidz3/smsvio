@@ -1,16 +1,16 @@
 'use client';
 
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CircleAlert, CircleCheck, LoaderCircle, SendHorizontal, UserRound, X } from 'lucide-react';
+import { AtSign, MessageSquareText, UserRound, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Activity } from '@/components/send/activity';
 import { controlClass, Field, SelectControl, Step } from '@/components/send/form';
+import { Hero } from '@/components/send/hero';
 import { PhonePreview } from '@/components/send/phone-preview';
-import { Summary } from '@/components/send/summary';
+import { Details, Tiles } from '@/components/send/summary';
 import { useCanMessage } from '@/components/shell/shell';
 import { useToast } from '@/components/toast';
-import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
 import { catalogApi } from '@/lib/catalog';
 import { messageApi, type MessageDetail } from '@/lib/messages';
@@ -140,7 +140,7 @@ export default function SendPage() {
   } else if (!ready) {
     blocker = 'Add a phone number or pick a contact.';
   } else if (preview.error instanceof ApiError) {
-    blocker = 'Fix the issue above to send.';
+    blocker = 'Fix the issue below to send.';
   } else if (preview.data === undefined) {
     blocker = 'Checking the message…';
   }
@@ -149,21 +149,41 @@ export default function SendPage() {
     <section className="grid gap-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Send</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Send</h1>
           <p className="text-muted-foreground mt-1 text-sm">
             An approved template, a number or a contact, and the sender for that country.
           </p>
         </div>
         {canSend ? null : (
-          <span className="bg-muted text-muted-foreground rounded-full px-3 py-1 text-xs font-medium">
+          <span className="bg-muted text-muted-foreground rounded-full px-4 py-1.5 text-xs font-medium">
             View only
           </span>
         )}
       </header>
+      <Hero
+        cost={preview.data?.price.display}
+        caption={caption}
+        segments={preview.data?.segments ?? 0}
+        blocker={blocker}
+        canSend={canSend}
+        disabled={disabled}
+        busy={busy}
+        outcome={outcome}
+        onSend={() => {
+          void send();
+        }}
+      />
+      {preview.error instanceof ApiError ? (
+        <p className="text-destructive bg-peach rounded-2xl px-5 py-3 text-sm font-medium">
+          {preview.error.message}
+        </p>
+      ) : null}
+      <Tiles preview={preview.data} loading={previewing} recipients={recipients} />
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-        <div className="bg-card grid divide-y rounded-2xl border shadow-xs lg:col-start-1">
+        <div className="grid gap-4">
           <Step
-            number={1}
+            icon={MessageSquareText}
+            tone="bg-lavender text-lavender-foreground"
             title="Message"
             description="Pick an approved template and fill in its variables."
           >
@@ -206,11 +226,12 @@ export default function SendPage() {
             )}
           </Step>
           <Step
-            number={2}
+            icon={UserRound}
+            tone="bg-mint text-mint-foreground"
             title="Recipient"
             description="Choose a saved contact or type a number in international format."
             aside={
-              <span className="bg-muted text-muted-foreground rounded-full px-2.5 py-1 text-xs font-medium tabular-nums">
+              <span className="bg-muted text-muted-foreground rounded-full px-3 py-1 text-xs font-medium tabular-nums">
                 {recipients === 0 ? 'No recipient yet' : '1 recipient'}
               </span>
             }
@@ -277,7 +298,7 @@ export default function SendPage() {
             </Field>
             {recipients === 0 ? null : (
               <ul aria-label="Recipients" className="flex flex-wrap gap-2">
-                <li className="bg-secondary text-secondary-foreground inline-flex max-w-full items-center gap-1.5 rounded-full py-1 pr-1 pl-3 text-sm font-medium">
+                <li className="bg-mint text-foreground inline-flex max-w-full items-center gap-1.5 rounded-full py-1 pr-1 pl-3 text-sm font-semibold">
                   <UserRound aria-hidden="true" className="size-3.5 shrink-0" />
                   <span className="truncate">{recipientLabel}</span>
                   <button
@@ -296,7 +317,8 @@ export default function SendPage() {
             )}
           </Step>
           <Step
-            number={3}
+            icon={AtSign}
+            tone="bg-peach text-peach-foreground"
             title="Sender"
             description="The approved sender ID for the destination country, or the shared number."
           >
@@ -326,73 +348,22 @@ export default function SendPage() {
             </Field>
           </Step>
         </div>
-        <div className="bg-card grid gap-5 rounded-2xl border p-4 shadow-xs sm:p-6 lg:sticky lg:top-20 lg:col-start-2 lg:row-span-2 lg:row-start-1">
-          <h2 className="text-base font-semibold tracking-tight">Preview</h2>
-          <PhonePreview
-            from={preview.data?.from ?? senderValue}
-            to={preview.data?.to ?? recipientLabel}
-            body={preview.data?.body ?? template?.body ?? ''}
-            draft={preview.data === undefined}
-            busy={previewing}
-          />
-          <Summary
-            preview={preview.data}
-            loading={previewing}
-            recipients={recipients}
-            templateName={template?.name ?? ''}
-            senderLabel={senderValue}
-            caption={caption}
-          />
-          {preview.error instanceof ApiError ? (
-            <p className="text-destructive bg-destructive/10 rounded-xl px-3 py-2 text-sm">
-              {preview.error.message}
-            </p>
-          ) : null}
-          {outcome === null ? null : (
-            <div
-              aria-live="polite"
-              className={
-                outcome.ok
-                  ? 'flex items-start gap-2 rounded-xl bg-emerald-500/15 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-300'
-                  : 'bg-destructive/10 text-destructive flex items-start gap-2 rounded-xl px-3 py-2 text-sm'
-              }
-            >
-              {outcome.ok ? (
-                <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              ) : (
-                <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              )}
-              <span>{outcome.text}</span>
-            </div>
-          )}
-          <div className="grid gap-2">
-            <span
-              title={canSend ? undefined : 'Only an owner, admin, or developer can send.'}
-              className="grid"
-            >
-              <Button
-                type="button"
-                disabled={disabled}
-                aria-busy={busy}
-                className="h-12 w-full gap-2 rounded-xl text-base"
-                onClick={() => {
-                  void send();
-                }}
-              >
-                {busy ? (
-                  <LoaderCircle aria-hidden="true" className="animate-spin" />
-                ) : (
-                  <SendHorizontal aria-hidden="true" />
-                )}
-                {busy ? 'Sending…' : 'Send'}
-              </Button>
-            </span>
-            {blocker === '' ? null : (
-              <span className="text-muted-foreground text-center text-xs">{blocker}</span>
-            )}
-          </div>
-        </div>
-        <div className="lg:col-start-1">
+        <div className="grid gap-4">
+          <section className="bg-card grid gap-5 rounded-2xl border p-5 sm:p-6">
+            <h2 className="text-lg font-bold tracking-tight">Preview</h2>
+            <PhonePreview
+              from={preview.data?.from ?? senderValue}
+              to={preview.data?.to ?? recipientLabel}
+              body={preview.data?.body ?? template?.body ?? ''}
+              draft={preview.data === undefined}
+              busy={previewing}
+            />
+            <Details
+              preview={preview.data}
+              templateName={template?.name ?? ''}
+              senderLabel={senderValue}
+            />
+          </section>
           <Activity items={activity} live={live} />
         </div>
       </div>

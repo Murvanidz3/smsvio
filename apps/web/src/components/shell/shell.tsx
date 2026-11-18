@@ -7,33 +7,13 @@ import {
   type SessionResponse,
 } from '@smsvio/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  AtSign,
-  BookOpen,
-  Calculator,
-  Contact,
-  CreditCard,
-  FileText,
-  KeyRound,
-  LayoutDashboard,
-  Menu,
-  MessagesSquare,
-  ScanSearch,
-  Search,
-  Send,
-  Settings,
-  ShieldCheck,
-  Users,
-  Webhook,
-  type LucideIcon,
-} from 'lucide-react';
+import { LifeBuoy, LogOut, Menu, Search, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
 
 import { Logo } from '@/components/brand/logo';
-import { MenuPin, useMenuPin } from '@/components/shell/menu-pin';
-import { RailLink } from '@/components/shell/rail';
+import { NavAnchor, NavLink } from '@/components/shell/nav-link';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { accountApi, ApiError } from '@/lib/api';
@@ -44,57 +24,50 @@ const NAV: readonly {
   href: string;
   label: string;
   group: (typeof GROUPS)[number];
-  icon: LucideIcon;
   capability?: Capability;
 }[] = [
-  { href: '/dashboard', label: 'Overview', group: 'Main', icon: LayoutDashboard },
-  { href: '/dashboard/templates', label: 'Templates', group: 'Main', icon: FileText },
-  { href: '/dashboard/send', label: 'Send', group: 'Main', icon: Send },
-  { href: '/dashboard/contacts', label: 'Contacts', group: 'Main', icon: Contact },
-  { href: '/dashboard/messages', label: 'Messages', group: 'Development', icon: MessagesSquare },
+  { href: '/dashboard', label: 'Overview', group: 'Main' },
+  { href: '/dashboard/templates', label: 'Templates', group: 'Main' },
+  { href: '/dashboard/send', label: 'Send', group: 'Main' },
+  { href: '/dashboard/contacts', label: 'Contacts', group: 'Main' },
+  { href: '/dashboard/messages', label: 'Messages', group: 'Development' },
   {
     href: '/dashboard/api-keys',
     label: 'API keys',
     group: 'Development',
-    icon: KeyRound,
     capability: 'developer',
   },
   {
     href: '/dashboard/webhooks',
     label: 'Webhooks',
     group: 'Development',
-    icon: Webhook,
     capability: 'developer',
   },
-  { href: '/docs', label: 'Documentation', group: 'Development', icon: BookOpen },
-  { href: '/dashboard/senders', label: 'Senders', group: 'Main', icon: AtSign },
+  { href: '/docs', label: 'Documentation', group: 'Development' },
+  { href: '/dashboard/senders', label: 'Senders', group: 'Main' },
   {
     href: '/dashboard/compliance',
     label: 'Compliance',
     group: 'Main',
-    icon: ShieldCheck,
     capability: 'compliance',
   },
-  { href: '/dashboard/users', label: 'Users', group: 'Account', icon: Users },
-  { href: '/dashboard/settings', label: 'Settings', group: 'Account', icon: Settings },
+  { href: '/dashboard/users', label: 'Users', group: 'Account' },
+  { href: '/dashboard/settings', label: 'Settings', group: 'Account' },
   {
     href: '/dashboard/billing',
     label: 'Billing',
     group: 'Account',
-    icon: CreditCard,
     capability: 'billing',
   },
   {
     href: '/dashboard/tools/number-lookup',
     label: 'Number lookup',
     group: 'Tools',
-    icon: ScanSearch,
   },
   {
     href: '/dashboard/tools/pricing',
     label: 'Pricing',
     group: 'Tools',
-    icon: Calculator,
   },
 ];
 
@@ -120,7 +93,6 @@ export function Shell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [clock, setClock] = useState('');
-  const { pinned, togglePin } = useMenuPin();
 
   useEffect(() => {
     const tick = () => {
@@ -160,76 +132,84 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   const data = session.data;
+  const role = data?.organization?.role;
 
   return (
     <div className="bg-background min-h-dvh">
-      <header className="vio-topbar border-sidebar-border bg-sidebar flex items-center gap-3 border-b px-4 sm:px-[18px]">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="md:hidden"
-          aria-label="Open menu"
-          onClick={() => {
-            setMenuOpen(true);
-          }}
-        >
-          <Menu aria-hidden />
-        </Button>
-        <Link href="/dashboard" aria-label="SMSVIO home">
+      <aside className="ds-side text-sidebar-foreground">
+        <Link href="/dashboard" aria-label="SMSVIO home" className="mb-8 inline-flex">
           <Logo />
         </Link>
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-muted-foreground hidden font-medium tabular-nums sm:inline">
-            {clock}
-          </span>
+        <Nav pathname={pathname} role={role} />
+        <SideFooter onSignOut={() => void signOut()} />
+      </aside>
+      <div className="ds-canvas flex min-w-0 flex-col">
+        <header className="bg-card/90 sticky top-0 z-30 flex items-center gap-3 rounded-t-[24px] px-4 py-3 backdrop-blur sm:px-8 md:static md:py-6">
           <Button
             type="button"
             variant="outline"
-            className="h-[38px] rounded-[9px] px-3 shadow-sm"
+            size="icon-lg"
+            className="md:hidden"
+            aria-label="Open menu"
+            onClick={() => {
+              setMenuOpen(true);
+            }}
+          >
+            <Menu aria-hidden />
+          </Button>
+          <Link href="/dashboard" aria-label="SMSVIO home" className="md:hidden">
+            <Logo />
+          </Link>
+          <button
+            type="button"
             aria-label="Search"
+            className="bg-muted text-muted-foreground hover:bg-accent focus-visible:ring-ring/40 ml-auto flex h-10 shrink-0 items-center justify-center gap-2 rounded-full px-0 text-sm font-medium outline-none focus-visible:ring-3 max-sm:w-10 sm:w-72 sm:justify-start sm:px-4 md:ml-0"
             onClick={() => {
               setPaletteOpen(true);
             }}
           >
-            <Search data-icon="inline-start" aria-hidden />
+            <Search className="size-4" aria-hidden />
             <span className="hidden sm:inline">Search</span>
-            <kbd className="text-muted-foreground hidden text-xs sm:inline">Ctrl K</kbd>
-          </Button>
-          {data?.organization === null || data?.organization === undefined ? null : (
-            <OrgSwitcher session={data} />
-          )}
-          {data?.organization === null || data?.organization === undefined ? null : (
-            <span className="bg-accent text-accent-foreground rounded-full px-2 py-0.5 text-xs font-semibold">
-              {data.organization.role}
+            <kbd className="text-muted-foreground/80 ml-auto hidden text-xs sm:inline">Ctrl K</kbd>
+          </button>
+          <div className="flex items-center gap-2 md:ml-auto">
+            <span className="text-muted-foreground hidden px-1 text-sm font-medium tabular-nums lg:inline">
+              {clock}
             </span>
-          )}
-          {data?.user.isPlatformAdmin === true ? (
-            <Link href="/admin" className="text-sm font-medium">
-              Admin
+            {data?.organization === null || data?.organization === undefined ? null : (
+              <OrgSwitcher session={data} />
+            )}
+            {data?.organization === null || data?.organization === undefined ? null : (
+              <span className="bg-muted text-foreground hidden h-10 items-center rounded-full px-4 text-xs font-semibold tracking-wide sm:inline-flex">
+                {data.organization.role}
+              </span>
+            )}
+            <Link
+              href="/dashboard/settings"
+              aria-label="Account settings"
+              className="bg-muted hover:bg-accent focus-visible:ring-ring/40 hidden size-10 place-items-center rounded-full outline-none focus-visible:ring-3 sm:grid"
+            >
+              <Settings className="size-4" aria-hidden />
             </Link>
-          ) : null}
-          <ThemeToggle />
-          <Button
-            type="button"
-            variant="outline"
-            className="h-[38px] rounded-[9px] px-3 shadow-sm"
-            onClick={() => void signOut()}
-          >
-            Sign out
-          </Button>
-        </div>
-      </header>
-      <aside
-        className="vio-side border-sidebar-border bg-sidebar text-sidebar-foreground border-r"
-        data-pinned={pinned ? 'true' : 'false'}
-      >
-        <Nav pathname={pathname} role={session.data?.organization?.role} />
-        <MenuPin pinned={pinned} onToggle={togglePin} />
-      </aside>
-      <div className="vio-canvas flex min-w-0 flex-col">
+            <a
+              href="mailto:support@smsvio.com"
+              aria-label="Contact support"
+              className="bg-muted hover:bg-accent focus-visible:ring-ring/40 hidden size-10 place-items-center rounded-full outline-none focus-visible:ring-3 sm:grid"
+            >
+              <LifeBuoy className="size-4" aria-hidden />
+            </a>
+            {data?.user.isPlatformAdmin === true ? (
+              <Link
+                href="/admin"
+                className="bg-primary text-primary-foreground hidden h-10 items-center rounded-full px-5 text-sm font-medium sm:inline-flex"
+              >
+                Admin
+              </Link>
+            ) : null}
+          </div>
+        </header>
         {data?.organization?.status === 'PENDING_VERIFICATION' ? (
-          <p className="bg-accent text-accent-foreground px-4 py-2 text-sm">
+          <p className="bg-peach text-peach-foreground mx-4 mb-2 rounded-2xl px-4 py-3 text-sm sm:mx-8">
             This organization is waiting for business verification.{' '}
             <Link
               className="font-semibold underline-offset-4 hover:underline"
@@ -239,7 +219,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </Link>
           </p>
         ) : null}
-        <main className="min-w-0 flex-1 px-4 pt-6 pb-6 sm:px-7">
+        <main className="min-w-0 flex-1 px-4 pt-2 pb-10 sm:px-8">
           {session.isPending ? <p className="text-muted-foreground text-sm">Loading…</p> : children}
         </main>
       </div>
@@ -251,28 +231,29 @@ export function Shell({ children }: { children: ReactNode }) {
           }}
         >
           <div
-            className="bg-sidebar text-sidebar-foreground h-full w-72 p-4"
+            className="bg-card text-sidebar-foreground flex h-full w-72 flex-col overflow-y-auto rounded-r-3xl p-5"
             onClick={(event) => {
               event.stopPropagation();
             }}
             role="dialog"
             aria-label="Menu"
           >
-            <Logo />
+            <Logo className="mb-6" />
             <div
-              className="mt-6"
+              className="flex-1"
               onClick={() => {
                 setMenuOpen(false);
               }}
             >
-              <Nav pathname={pathname} role={session.data?.organization?.role} showLabels />
+              <Nav pathname={pathname} role={role} />
             </div>
+            <SideFooter onSignOut={() => void signOut()} />
           </div>
         </div>
       ) : null}
       {paletteOpen ? (
         <Palette
-          role={session.data?.organization?.role}
+          role={role}
           onClose={() => {
             setPaletteOpen(false);
           }}
@@ -282,62 +263,46 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function Nav({
-  pathname,
-  role,
-  showLabels = false,
-}: {
-  pathname: string;
-  role: MembershipRole | undefined;
-  showLabels?: boolean;
-}) {
+function Nav({ pathname, role }: { pathname: string; role: MembershipRole | undefined }) {
   const items = visibleNav(role);
   return (
-    <nav
-      className={showLabels ? 'grid gap-4' : 'grid min-h-0 flex-1 gap-1 overflow-y-auto'}
-      aria-label="Dashboard"
-    >
+    <nav className="grid flex-1 content-start gap-3" aria-label="Dashboard">
       {GROUPS.map((group) => (
-        <div key={group} className={showLabels ? 'grid gap-1' : 'grid gap-0.5'}>
-          {showLabels ? (
-            <p className="text-muted-foreground px-3 text-xs font-semibold tracking-wide">
-              {group}
-            </p>
-          ) : (
-            <p className="vio-group text-muted-foreground">{group}</p>
-          )}
+        <div key={group} className="grid gap-0.5 border-t pt-3 first:border-t-0 first:pt-0">
+          <p className="sr-only">{group}</p>
           {items
             .filter((item) => item.group === group)
             .map((item) => (
-              <RailLink
+              <NavLink
                 key={item.href}
                 href={item.href}
                 label={item.label}
-                icon={item.icon}
-                showLabel={showLabels}
                 current={isCurrent(pathname, item.href)}
               />
             ))}
         </div>
       ))}
-      <div className={showLabels ? 'grid gap-1' : 'grid gap-0.5'}>
-        {showLabels ? (
-          <p className="text-muted-foreground px-3 text-xs font-semibold tracking-wide">Help</p>
-        ) : (
-          <p className="vio-group text-muted-foreground">Help</p>
-        )}
-        <a
-          className="hover:bg-sidebar-accent flex min-h-11 w-full items-center gap-3 rounded-[10px] px-[13px] text-sm font-medium whitespace-nowrap"
-          href="mailto:support@smsvio.com"
-          title="Support"
-        >
-          <span className="grid size-[22px] shrink-0 place-items-center" aria-hidden>
-            ?
-          </span>
-          <span className={showLabels ? undefined : 'vio-lbl'}>Support</span>
-        </a>
+      <div className="grid gap-0.5 border-t pt-3">
+        <p className="sr-only">Help</p>
+        <NavAnchor href="mailto:support@smsvio.com" label="Support" />
       </div>
     </nav>
+  );
+}
+
+function SideFooter({ onSignOut }: { onSignOut: () => void }) {
+  return (
+    <div className="mt-6 grid gap-0.5 border-t pt-3">
+      <ThemeToggle variant="switch" />
+      <button
+        type="button"
+        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/40 flex items-center gap-2 rounded-full px-3 py-2 text-left text-[15px] font-medium outline-none focus-visible:ring-3"
+        onClick={onSignOut}
+      >
+        <LogOut className="size-4" aria-hidden />
+        Sign out
+      </button>
+    </div>
   );
 }
 
@@ -346,14 +311,16 @@ function OrgSwitcher({ session }: { session: SessionResponse }) {
   const queryClient = useQueryClient();
   if (session.memberships.length < 2 || session.organization === null) {
     return (
-      <span className="hidden text-sm font-medium sm:inline">{session.organization?.name}</span>
+      <span className="bg-muted hidden h-10 items-center rounded-full px-4 text-sm font-medium sm:inline-flex">
+        {session.organization?.name}
+      </span>
     );
   }
   return (
     <label className="text-sm">
       <span className="sr-only">Organization</span>
       <select
-        className="border-input bg-background h-8 rounded-lg border px-2"
+        className="border-input bg-muted h-10 max-w-40 rounded-full border px-4 text-sm font-medium sm:max-w-none"
         value={session.organization.id}
         onChange={(event) => {
           void accountApi.switchOrganization(event.target.value).then(async () => {
@@ -385,7 +352,7 @@ function Palette({ role, onClose }: { role: MembershipRole | undefined; onClose:
       onClick={onClose}
     >
       <div
-        className="bg-popover text-popover-foreground w-full max-w-md rounded-xl border p-2 shadow-xl"
+        className="bg-popover text-popover-foreground mx-auto w-full max-w-md rounded-3xl border p-3 shadow-xl"
         role="dialog"
         aria-label="Command palette"
         onClick={(event) => {
@@ -395,7 +362,7 @@ function Palette({ role, onClose }: { role: MembershipRole | undefined; onClose:
         <input
           autoFocus
           placeholder="Jump to a page"
-          className="h-10 w-full bg-transparent px-3 text-sm outline-none"
+          className="bg-muted h-11 w-full rounded-full px-4 text-sm outline-none"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -410,12 +377,12 @@ function Palette({ role, onClose }: { role: MembershipRole | undefined; onClose:
             }
           }}
         />
-        <ul className="grid">
+        <ul className="mt-2 grid">
           {items.map((item) => (
             <li key={item.href}>
               <button
                 type="button"
-                className="hover:bg-accent w-full rounded-lg px-3 py-2 text-left text-sm"
+                className="hover:bg-muted w-full rounded-full px-4 py-2 text-left text-sm font-medium"
                 onClick={() => {
                   router.push(item.href);
                   onClose();
@@ -430,7 +397,6 @@ function Palette({ role, onClose }: { role: MembershipRole | undefined; onClose:
     </div>
   );
 }
-
 export function useCanBilling(): boolean {
   const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
   const role = session.data?.organization?.role;

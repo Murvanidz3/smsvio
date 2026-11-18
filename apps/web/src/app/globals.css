@@ -42,6 +42,21 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-mint: var(--mint);
+  --color-mint-foreground: var(--mint-foreground);
+  --color-peach: var(--peach);
+  --color-peach-foreground: var(--peach-foreground);
+  --color-lavender: var(--lavender);
+  --color-lavender-foreground: var(--lavender-foreground);
+  --color-teal: var(--teal);
+  --color-teal-foreground: var(--teal-foreground);
+  --color-hero: var(--hero);
+  --color-hero-foreground: var(--hero-foreground);
+  --color-field: var(--field);
+  --color-positive: var(--positive);
+  --color-expense: var(--expense);
+  --shadow-xs: none;
+  --shadow-sm: 0 1px 2px rgb(17 17 20 / 4%);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -53,77 +68,103 @@
 
 :root {
   --radius: 0.875rem;
-  --background: #dde3ec;
-  --foreground: #0f172a;
-  --card: #eef2f7;
-  --card-foreground: #0f172a;
-  --popover: #eef2f7;
-  --popover-foreground: #0f172a;
-  --primary: #0b1220;
+  --background: #f1f1f3;
+  --foreground: #111114;
+  --card: #ffffff;
+  --card-foreground: #111114;
+  --popover: #ffffff;
+  --popover-foreground: #111114;
+  --primary: #111114;
   --primary-foreground: #ffffff;
-  --secondary: #e2e8f0;
-  --secondary-foreground: #0f172a;
-  --muted: #e2e8f0;
-  --muted-foreground: #5b697d;
-  --accent: #e2e8f0;
-  --accent-foreground: #0f172a;
-  --destructive: #9f1239;
-  --border: #cad4e1;
-  --input: #b4c1d2;
-  --ring: #0b1220;
-  --brand-ink: #0f172a;
-  --brand-mark: #0b1220;
+  --secondary: #f1f1f3;
+  --secondary-foreground: #111114;
+  --muted: #f4f4f6;
+  --muted-foreground: #6b6b76;
+  --accent: #eeeef1;
+  --accent-foreground: #111114;
+  --destructive: #be123c;
+  --border: #eaeaee;
+  --input: #e4e4ea;
+  --ring: #111114;
+  --field: #f4f4f6;
+  --hero: #14141a;
+  --hero-foreground: #ffffff;
+  --mint: #e6f6ec;
+  --mint-foreground: #166534;
+  --peach: #fde9df;
+  --peach-foreground: #9a3412;
+  --lavender: #e5ecfb;
+  --lavender-foreground: #3730a3;
+  --teal: #e3f2ef;
+  --teal-foreground: #115e59;
+  --positive: #16a34a;
+  --expense: #ea7a3c;
+  --brand-ink: #111114;
+  --brand-mark: #111114;
   --brand-glyph: #ffffff;
-  --chart-1: #0f172a;
-  --chart-2: #334155;
-  --chart-3: #64748b;
-  --chart-4: #94a3b8;
-  --chart-5: #cbd5e1;
-  --sidebar: #e7ecf3;
-  --sidebar-foreground: #334155;
-  --sidebar-primary: #0b1220;
+  --chart-1: #111114;
+  --chart-2: #3f3f46;
+  --chart-3: #71717a;
+  --chart-4: #a1a1aa;
+  --chart-5: #d4d4d8;
+  --sidebar: #f1f1f3;
+  --sidebar-foreground: #6b6b76;
+  --sidebar-primary: #111114;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e2e8f0;
-  --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: #cad4e1;
-  --sidebar-ring: #0b1220;
+  --sidebar-accent: #e8e8ec;
+  --sidebar-accent-foreground: #111114;
+  --sidebar-border: #e4e4ea;
+  --sidebar-ring: #111114;
 }
 
 .dark {
-  --background: #121820;
-  --foreground: #f1f5f9;
-  --card: #1c2533;
-  --card-foreground: #f1f5f9;
-  --popover: #1c2533;
-  --popover-foreground: #f1f5f9;
-  --primary: #e8eef6;
-  --primary-foreground: #0b1220;
-  --secondary: #243041;
-  --secondary-foreground: #f1f5f9;
-  --muted: #243041;
-  --muted-foreground: #8b9cb3;
-  --accent: #243041;
-  --accent-foreground: #f1f5f9;
+  --background: #0c0c0f;
+  --foreground: #f4f4f6;
+  --card: #16161b;
+  --card-foreground: #f4f4f6;
+  --popover: #1a1a20;
+  --popover-foreground: #f4f4f6;
+  --primary: #f4f4f6;
+  --primary-foreground: #111114;
+  --secondary: #1f1f26;
+  --secondary-foreground: #f4f4f6;
+  --muted: #1f1f26;
+  --muted-foreground: #9b9ba8;
+  --accent: #23232b;
+  --accent-foreground: #f4f4f6;
   --destructive: #fda4af;
-  --border: #2d3a4d;
-  --input: #3d4d63;
-  --ring: #e8eef6;
-  --brand-ink: #f1f5f9;
-  --brand-mark: #e8eef6;
-  --brand-glyph: #0b1220;
-  --chart-1: #e8eef6;
-  --chart-2: #cbd5e1;
-  --chart-3: #94a3b8;
-  --chart-4: #64748b;
-  --chart-5: #334155;
-  --sidebar: #181f2a;
-  --sidebar-foreground: #cbd5e1;
-  --sidebar-primary: #e8eef6;
-  --sidebar-primary-foreground: #0b1220;
-  --sidebar-accent: #243041;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: #2d3a4d;
-  --sidebar-ring: #e8eef6;
+  --border: #25252d;
+  --input: #30303b;
+  --ring: #f4f4f6;
+  --field: #1f1f26;
+  --hero: #22222b;
+  --hero-foreground: #ffffff;
+  --mint: #15291f;
+  --mint-foreground: #86efac;
+  --peach: #2d201a;
+  --peach-foreground: #fdba74;
+  --lavender: #1b2236;
+  --lavender-foreground: #a5b4fc;
+  --teal: #14282a;
+  --teal-foreground: #5eead4;
+  --positive: #4ade80;
+  --expense: #fb923c;
+  --brand-ink: #f4f4f6;
+  --brand-mark: #f4f4f6;
+  --brand-glyph: #111114;
+  --chart-1: #f4f4f6;
+  --chart-2: #d4d4d8;
+  --chart-3: #a1a1aa;
+  --chart-4: #71717a;
+  --chart-5: #3f3f46;
+  --sidebar: #0c0c0f;
+  --sidebar-foreground: #9b9ba8;
+  --sidebar-primary: #f4f4f6;
+  --sidebar-primary-foreground: #111114;
+  --sidebar-accent: #1f1f26;
+  --sidebar-accent-foreground: #f4f4f6;
+  --sidebar-border: #25252d;
+  --sidebar-ring: #f4f4f6;
 }
 
 @layer base {
@@ -145,6 +186,69 @@
   }
 }
 
+/* Customer dashboard shell: light sidebar, one large rounded white panel. */
+.ds-side {
+  display: none;
+}
+
+.ds-canvas {
+  min-height: 100dvh;
+  background: var(--card);
+}
+
+@media (min-width: 768px) {
+  .ds-side {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    display: flex;
+    width: 244px;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 24px 14px 20px 26px;
+  }
+
+  .ds-canvas {
+    margin: 12px 12px 12px 244px;
+    min-height: calc(100dvh - 24px);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+  }
+}
+
+.ds-canvas h1 {
+  font-size: 1.75rem;
+  line-height: 2.1rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--foreground);
+}
+
+.ds-canvas
+  :is(
+    input:not([type='checkbox'], [type='radio'], [type='file'], [type='range'], [type='color']),
+    select:not([multiple])
+  ) {
+  border-color: var(--input);
+  border-radius: 9999px;
+  background-color: var(--field);
+  padding-left: 1rem;
+}
+
+.ds-canvas textarea {
+  border-color: var(--input);
+  border-radius: 1.25rem;
+  background-color: var(--field);
+}
+
+.ds-canvas :is(input, select, textarea):focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--ring) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.ds-canvas table thead {
+  background: var(--muted);
+}
 .vio-topbar {
   position: fixed;
   inset: 0 0 auto;

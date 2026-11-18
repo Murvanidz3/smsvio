@@ -1,62 +1,89 @@
+import { Check, Clock, X } from 'lucide-react';
 import { cn } from 'cn';
 
 import type { MessageDetail } from '@/lib/messages';
 
-function tone(status: string): string {
+function kind(status: string): 'ok' | 'bad' | 'wait' {
   if (status === 'delivered') {
-    return 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300';
+    return 'ok';
   }
   if (['failed', 'undelivered', 'rejected', 'blocked'].includes(status)) {
-    return 'bg-rose-500/15 text-rose-800 dark:text-rose-300';
+    return 'bad';
   }
-  return 'bg-muted text-muted-foreground';
+  return 'wait';
 }
+
+const TONE = {
+  ok: 'bg-mint text-mint-foreground',
+  bad: 'bg-peach text-peach-foreground',
+  wait: 'bg-lavender text-lavender-foreground',
+} as const;
 
 export function Activity({ items, live }: { items: MessageDetail[]; live: boolean }) {
   return (
-    <aside className="bg-card rounded-2xl border p-4 shadow-xs sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold tracking-tight">Activity</h2>
-        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+    <aside className="bg-card rounded-2xl border p-5 sm:p-6">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-bold tracking-tight">Activity</h2>
+        <span
+          className="text-muted-foreground inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
+          title={live ? undefined : 'Live updates unavailable. Refreshing every few seconds.'}
+        >
           <span
             aria-hidden="true"
-            className={cn(
-              'size-2 rounded-full',
-              live ? 'animate-pulse bg-emerald-500' : 'bg-amber-500',
-            )}
+            className={cn('size-2 rounded-full', live ? 'bg-positive animate-pulse' : 'bg-expense')}
           />
-          {live ? 'Live updates' : 'Live updates unavailable. Refreshing every few seconds.'}
+          {live ? 'Live updates' : 'Refreshing'}
         </span>
       </div>
+      {live ? null : (
+        <p className="text-muted-foreground mt-2 text-xs">
+          Live updates unavailable. Refreshing every few seconds.
+        </p>
+      )}
       {items.length === 0 ? (
-        <p className="text-muted-foreground mt-3 text-sm">
+        <p className="text-muted-foreground mt-4 text-sm">
           Messages you send from this page show up here.
         </p>
       ) : (
-        <ul className="mt-4 grid gap-3 md:grid-cols-2">
-          {items.map((item) => (
-            <li key={item.id} className="bg-background rounded-xl border p-3 text-sm">
-              <div className="flex items-center justify-between gap-2">
-                <p
-                  className={cn(
-                    'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize',
-                    tone(item.status),
-                  )}
-                >
-                  {item.status}
-                </p>
-                <span className="text-muted-foreground truncate tabular-nums">{item.to}</span>
-              </div>
-              <ol className="mt-3 grid gap-1.5 border-l pl-3">
-                {item.events.map((event) => (
-                  <li key={`${event.at}-${event.status}`} className="text-muted-foreground text-xs">
-                    <span className="text-foreground font-medium capitalize">{event.status}</span>
-                    {event.detail === null ? '' : ` · ${event.detail}`}
-                  </li>
-                ))}
-              </ol>
-            </li>
-          ))}
+        <ul className="mt-4 grid gap-1 divide-y">
+          {items.map((item) => {
+            const state = kind(item.status);
+            const Icon = state === 'ok' ? Check : state === 'bad' ? X : Clock;
+            return (
+              <li key={item.id} className="grid gap-3 py-3 text-sm first:pt-0">
+                <div className="flex items-center gap-3">
+                  <span
+                    className={cn(
+                      'grid size-10 shrink-0 place-items-center rounded-xl',
+                      TONE[state],
+                    )}
+                  >
+                    <Icon aria-hidden="true" className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate font-bold tabular-nums">{item.to}</span>
+                    <p className="text-muted-foreground text-xs capitalize">{item.status}</p>
+                  </div>
+                  <span
+                    className={cn(
+                      'shrink-0 font-bold tabular-nums',
+                      state === 'bad' ? 'text-muted-foreground line-through' : 'text-expense',
+                    )}
+                  >
+                    {`\u2212${item.price.display}`}
+                  </span>
+                </div>
+                <ol className="text-muted-foreground ml-[3.25rem] grid gap-1 text-xs">
+                  {item.events.map((event) => (
+                    <li key={`${event.at}-${event.status}`}>
+                      <span className="text-foreground font-medium capitalize">{event.status}</span>
+                      {event.detail === null ? '' : ` \u00b7 ${event.detail}`}
+                    </li>
+                  ))}
+                </ol>
+              </li>
+            );
+          })}
         </ul>
       )}
     </aside>

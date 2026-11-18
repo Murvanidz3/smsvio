@@ -7,7 +7,7 @@ import { type ReactNode, type SubmitEvent, useState } from 'react';
 import { flag } from '@/components/catalog/table-tools';
 import { useCanBilling } from '@/components/shell/shell';
 import { useToast } from '@/components/toast';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { accountApi, ApiError } from '@/lib/api';
 import { insightApi, type Overview } from '@/lib/billing';
 
@@ -93,37 +93,64 @@ function Dashboard() {
           .
         </p>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card title="Templates" href="/dashboard/templates" action="View all">
-          <p className="text-2xl font-bold">{data?.templates ?? '—'}</p>
-          <p className="text-muted-foreground text-sm">Create a new template from the list.</p>
-        </Card>
-        <Card title="Total contacts" href="/dashboard/contacts" action="View all">
-          <p className="text-2xl font-bold">{data?.contacts ?? '—'}</p>
-        </Card>
-        <div className="bg-card rounded-[18px] border p-5 shadow-sm">
-          <h2 className="font-semibold">Deliverability</h2>
-          <p className="mt-2 text-2xl font-bold">
-            {data?.deliverability === null || data === undefined
-              ? '—'
-              : `${String(Math.round(data.deliverability * 100))}%`}
-          </p>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Delivered divided by messages with a final status.
-          </p>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,2fr)]">
+        <div className="bg-hero text-hero-foreground grid gap-6 rounded-3xl p-6 sm:p-8">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-sm font-medium text-white/60">Balance</h2>
+            <Link
+              href={canBill ? '/dashboard/billing' : '/dashboard'}
+              className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white hover:bg-white/20"
+            >
+              {canBill ? 'Manage' : 'Available'}
+            </Link>
+          </div>
+          <div className="flex items-end justify-between gap-4">
+            <p className="text-4xl font-bold tracking-tight tabular-nums sm:text-5xl">
+              {data?.balance.available.display ?? '—'}
+              <span className="ml-2 text-lg font-medium text-white/60">USD</span>
+            </p>
+            <Sparkline days={data?.days ?? []} />
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/dashboard/send"
+              className={buttonVariants({ variant: 'light', size: 'lg' })}
+            >
+              Send a message
+            </Link>
+            <Link
+              href="/dashboard/messages"
+              className={buttonVariants({ variant: 'outline-light', size: 'lg' })}
+            >
+              View messages
+            </Link>
+          </div>
         </div>
-        <Card
-          title="Balance"
-          href={canBill ? '/dashboard/billing' : '/dashboard'}
-          action={canBill ? 'Manage' : 'Available'}
-        >
-          <p className="text-2xl font-bold">{data?.balance.available.display ?? '—'} USD</p>
-        </Card>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Card title="Templates" href="/dashboard/templates" action="View all" tone="bg-lavender">
+            <p className="text-3xl font-bold tracking-tight">{data?.templates ?? '—'}</p>
+            <p className="text-muted-foreground text-sm">Create a new template from the list.</p>
+          </Card>
+          <Card title="Total contacts" href="/dashboard/contacts" action="View all" tone="bg-mint">
+            <p className="text-3xl font-bold tracking-tight">{data?.contacts ?? '—'}</p>
+          </Card>
+          <div className="bg-peach grid content-start gap-2 rounded-3xl p-5">
+            <h2 className="text-muted-foreground text-sm font-medium">Deliverability</h2>
+            <p className="text-3xl font-bold tracking-tight">
+              {data?.deliverability === null || data === undefined
+                ? '—'
+                : `${String(Math.round(data.deliverability * 100))}%`}
+            </p>
+            <p className="text-muted-foreground text-sm">
+              Delivered divided by messages with a final status.
+            </p>
+          </div>
+        </div>
       </div>
-      <div className="bg-card grid gap-4 rounded-[18px] border p-5 shadow-sm">
+      <div className="bg-card grid gap-5 rounded-2xl border p-5 sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="font-semibold">Messages</h2>
+            <h2 className="text-lg font-bold tracking-tight">Messages</h2>
             <p className="text-muted-foreground mt-1 text-sm">
               This page counts your messages when it opens. Stored daily statistics refresh every 15
               minutes.
@@ -187,17 +214,24 @@ function Dashboard() {
           </p>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-4">
-          <Stat label="Sent" value={String(data?.totals.sent ?? 0)} />
-          <Stat label="Delivered" value={String(data?.totals.delivered ?? 0)} />
-          <Stat label="Failed" value={String(data?.totals.failed ?? 0)} />
-          <Stat label="Spend" value={`${data?.totals.spend.display ?? '0.00'} USD`} />
-        </div>
+          <Stat label="Sent" value={String(data?.totals.sent ?? 0)} tone="bg-lavender" />
+          <Stat label="Delivered" value={String(data?.totals.delivered ?? 0)} tone="bg-mint" />
+          <Stat label="Failed" value={String(data?.totals.failed ?? 0)} tone="bg-peach" />
+          <Stat
+            label="Spend"
+            value={`${data?.totals.spend.display ?? '0.00'} USD`}
+            tone="bg-teal"
+          />
+        </div>{' '}
         <UsageChart days={data?.days ?? []} />
       </div>
-      <div className="bg-card rounded-[18px] border p-5 shadow-sm">
+      <div className="bg-card rounded-2xl border p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="font-semibold">Recent contacts</h2>
-          <Link href="/dashboard/contacts" className="text-sm font-semibold underline">
+          <h2 className="text-lg font-bold tracking-tight">Recent contacts</h2>
+          <Link
+            href="/dashboard/contacts"
+            className="hover:bg-muted rounded-full border px-3 py-1 text-xs font-medium"
+          >
             View all contacts
           </Link>
         </div>
@@ -216,12 +250,12 @@ function Dashboard() {
             <tbody>
               {data.recentContacts.map((contact) => (
                 <tr key={contact.id} className="border-border border-t">
-                  <td className="py-2 font-mono text-xs">{contact.id.slice(0, 8)}</td>
-                  <td className="py-2">
+                  <td className="py-3 font-mono text-xs">{contact.id.slice(0, 8)}</td>
+                  <td className="py-3 font-medium">
                     {flag(contact.country)} {contact.country} +{contact.dialCode}
                   </td>
-                  <td className="py-2 font-mono text-xs">{contact.phone}</td>
-                  <td className="py-2">{contact.optedOut ? 'Opted out' : 'Active'}</td>
+                  <td className="py-3 font-mono text-xs">{contact.phone}</td>
+                  <td className="py-3">{contact.optedOut ? 'Opted out' : 'Active'}</td>
                 </tr>
               ))}
             </tbody>
@@ -236,18 +270,23 @@ function Card({
   title,
   href,
   action,
+  tone,
   children,
 }: {
   title: string;
   href: string;
   action: string;
+  tone: string;
   children: ReactNode;
 }) {
   return (
-    <div className="bg-card grid gap-2 rounded-[18px] border p-5 shadow-sm">
+    <div className={`${tone} grid content-start gap-2 rounded-3xl p-5`}>
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-semibold">{title}</h2>
-        <Link href={href} className="text-sm font-semibold underline">
+        <h2 className="text-muted-foreground text-sm font-medium">{title}</h2>
+        <Link
+          href={href}
+          className="bg-card/70 hover:bg-card rounded-full px-2.5 py-0.5 text-xs font-medium"
+        >
           {action}
         </Link>
       </div>
@@ -256,44 +295,64 @@ function Card({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
-    <div>
+    <div className={`${tone} rounded-2xl p-4`}>
       <p className="text-muted-foreground text-sm">{label}</p>
-      <p className="text-xl font-bold">{value}</p>
+      <p className="mt-1 text-2xl font-bold tracking-tight">{value}</p>
     </div>
   );
 }
 
+function Sparkline({ days }: { days: Overview['days'] }) {
+  if (days.length < 2) {
+    return null;
+  }
+  const peak = Math.max(1, ...days.map((day) => day.sent));
+  const step = 120 / (days.length - 1);
+  const points = days
+    .map(
+      (day, index) =>
+        `${String(Math.round(index * step))},${String(Math.round(34 - (day.sent / peak) * 30))}`,
+    )
+    .join(' ');
+  return (
+    <svg
+      role="img"
+      aria-label="Daily sent messages trend"
+      viewBox="0 0 120 38"
+      className="h-10 w-28 shrink-0"
+    >
+      <polyline
+        points={points}
+        fill="none"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="stroke-positive"
+      />
+    </svg>
+  );
+}
 function UsageChart({ days }: { days: Overview['days'] }) {
   const peak = Math.max(1, ...days.map((day) => day.sent));
   if (days.length === 0) {
     return null;
   }
   return (
-    <svg
+    <div
       role="img"
       aria-label="Daily sent messages"
-      viewBox={`0 0 ${String(days.length * 16)} 120`}
-      className="h-36 min-w-full"
+      className="flex h-40 items-end justify-between gap-2"
     >
-      {days.map((day, index) => {
-        const height = Math.round((day.sent / peak) * 100);
-        return (
-          <rect
-            key={day.day}
-            x={index * 16 + 3}
-            y={110 - height}
-            width="10"
-            height={height}
-            className="fill-primary"
-          >
-            <title>
-              {day.day}: {day.sent} sent
-            </title>
-          </rect>
-        );
-      })}
-    </svg>
+      {days.map((day) => (
+        <div
+          key={day.day}
+          title={`${day.day}: ${String(day.sent)} sent`}
+          style={{ height: `${String(Math.max(4, Math.round((day.sent / peak) * 100)))}%` }}
+          className="bg-primary min-w-1.5 max-w-5 flex-1 rounded-full"
+        />
+      ))}
+    </div>
   );
 }
