@@ -31,6 +31,10 @@ describe('loadWorkerEnv', () => {
       SMTP_USER: undefined,
       SMTP_PASSWORD: undefined,
       SMTP_FROM: undefined,
+      SENT_DM_API_KEY: undefined,
+      SENT_DM_BASE_URL: 'https://api.sent.dm',
+      SENT_DM_WEBHOOK_SECRET: undefined,
+      SENT_DM_SANDBOX: false,
     });
   });
 
@@ -51,6 +55,26 @@ describe('loadWorkerEnv', () => {
         API_INTERNAL_URL: 'not a url',
       }),
     ).toThrow(/API_INTERNAL_URL/);
+  });
+
+  it('keeps a Sent API key and rejects a non-https base URL', () => {
+    const key = 'sent-test-key';
+    expect(
+      loadWorkerEnv({
+        REDIS_URL: 'redis://redis:6379',
+        DATABASE_URL: 'postgresql://smsvio:pw@postgres:5432/smsvio',
+        APP_ENCRYPTION_KEY: KEY,
+        SENT_DM_API_KEY: key,
+      }).SENT_DM_API_KEY,
+    ).toBe(key);
+    expect(() =>
+      loadWorkerEnv({
+        REDIS_URL: 'redis://redis:6379',
+        DATABASE_URL: 'postgresql://smsvio:pw@postgres:5432/smsvio',
+        APP_ENCRYPTION_KEY: KEY,
+        SENT_DM_BASE_URL: 'http://api.sent.dm',
+      }),
+    ).toThrow(/SENT_DM_BASE_URL/);
   });
 
   it('rejects a heartbeat interval below one second', () => {

@@ -8,7 +8,20 @@ export interface ProviderSendRequest {
   readonly body: string;
   readonly encoding: string;
   readonly segments: number;
+  /** SMSVIO message id. Template-only providers use it as the idempotency key. */
+  readonly messageId?: string;
+  /** SMSVIO template id. Template-only providers (Sent.dm) map it to their own template. */
+  readonly templateId?: string | null;
+  readonly variables?: Readonly<Record<string, string>>;
 }
+
+/** SMSVIO error codes a provider send can end with. Each is a key of SMS_ERRORS. */
+export type ProviderErrorCode =
+  | 'carrier_rejected'
+  | 'provider_auth_failed'
+  | 'invalid_number'
+  | 'template_not_approved'
+  | 'rate_limited';
 
 export interface ScheduledReceipt {
   readonly status: MockReceiptStatus;
@@ -21,9 +34,15 @@ export type ProviderSendResult =
       readonly providerMessageId: string;
       /** Present for the mock provider, which schedules its own receipt. A carrier receipt arrives later. */
       readonly receipt?: ScheduledReceipt;
+      /** Provider request id (Sent `meta.request_id`), kept for support. */
+      readonly providerRequestId?: string;
+      /** Channel the provider chose, for example `sms`. */
+      readonly channel?: string;
+      /** Provider-side template id the message was sent from. */
+      readonly providerTemplateId?: string;
     }
-  | { readonly status: 'temporary_failure'; readonly errorCode: 'carrier_rejected' }
-  | { readonly status: 'permanent_failure'; readonly errorCode: 'carrier_rejected' };
+  | { readonly status: 'temporary_failure'; readonly errorCode: ProviderErrorCode }
+  | { readonly status: 'permanent_failure'; readonly errorCode: ProviderErrorCode };
 
 export interface RawHttpRequest {
   readonly headers: Readonly<Record<string, string | undefined>>;

@@ -64,7 +64,8 @@ export async function createApp(env: ApiEnv): Promise<NestFastifyApplication> {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule.forRoot(env),
     createFastifyAdapter(env),
-    { bufferLogs: true },
+    // rawBody keeps the exact JSON bytes for webhook signature checks (Sent.dm).
+    { bufferLogs: true, rawBody: true },
   );
   return configureApp(app);
 }

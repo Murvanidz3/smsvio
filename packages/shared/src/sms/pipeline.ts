@@ -7,6 +7,7 @@ export const MESSAGE_STATES = [
   'EXPIRED',
   'FAILED',
   'REJECTED',
+  'BLOCKED',
 ] as const;
 
 export type MessageState = (typeof MESSAGE_STATES)[number];
@@ -22,12 +23,14 @@ export const ORG_SENDS_PER_SECOND = 20;
 const FORWARD: Record<MessageState, readonly MessageState[]> = {
   QUEUED: ['SENDING', 'FAILED'],
   SENDING: ['SENT', 'FAILED'],
-  SENT: ['DELIVERED', 'UNDELIVERED', 'EXPIRED'],
+  SENT: ['DELIVERED', 'UNDELIVERED', 'EXPIRED', 'BLOCKED'],
   EXPIRED: ['DELIVERED'],
   DELIVERED: [],
   UNDELIVERED: [],
   FAILED: [],
   REJECTED: [],
+  /** The provider gated the send before any delivery attempt (Sent.dm `BLOCKED`). */
+  BLOCKED: [],
 };
 
 /**
@@ -61,6 +64,26 @@ export const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
 export function sendLockKey(messageId: string): string {
   return `smsvio:lock:send:${messageId}`;
+}
+
+/**
+ * What each receipt-queue token does: the next status and the error code stored with it.
+ * `blocked*` and `filtered_opt_out` come from Sent.dm webhooks.
+ */
+export const RECEIPT_OUTCOMES = {
+  delivered: { status: 'DELIVERED', errorCode: null },
+  undelivered: { status: 'UNDELIVERED', errorCode: 'carrier_rejected' },
+  expired: { status: 'EXPIRED', errorCode: 'expired' },
+  filtered_opt_out: { status: 'UNDELIVERED', errorCode: 'recipient_opted_out' },
+  blocked: { status: 'BLOCKED', errorCode: 'provider_balance_low' },
+  blocked_template: { status: 'BLOCKED', errorCode: 'template_not_approved' },
+  blocked_other: { status: 'BLOCKED', errorCode: 'provider_blocked' },
+} as const satisfies Record<string, { status: MessageState; errorCode: string | null }>;
+
+export type ReceiptToken = keyof typeof RECEIPT_OUTCOMES;
+
+export function receiptOutcome(token: string): (typeof RECEIPT_OUTCOMES)[ReceiptToken] | null {
+  return Object.hasOwn(RECEIPT_OUTCOMES, token) ? RECEIPT_OUTCOMES[token as ReceiptToken] : null;
 }
 
 /** Queue member for one delivery receipt. The id is the provider's message id. */

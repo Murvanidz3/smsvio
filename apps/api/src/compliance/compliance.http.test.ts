@@ -260,6 +260,30 @@ describe('compliance and the operator queue', () => {
       .expect(201);
     const health = await owner.get('/api/internal/admin/health').expect(200);
     expect(health.body.queues.send).toBe(0);
+    expect(health.body.stuck).toEqual([]);
+    expect(health.body.errorGroups).toEqual([]);
+    const operations = await owner.get('/api/internal/admin/operations').expect(200);
+    expect(operations.body.paused).toBe(false);
+    expect(operations.body.today.total).toEqual(expect.any(Number));
+    await owner
+      .post('/api/internal/admin/sending')
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', csrf)
+      .send({ paused: true })
+      .expect(201);
+    const paused = await owner.get('/api/internal/admin/operations').expect(200);
+    expect(paused.body.paused).toBe(true);
+    await owner
+      .post('/api/internal/admin/sending')
+      .set('origin', ORIGIN)
+      .set('x-csrf-token', csrf)
+      .send({ paused: false })
+      .expect(201);
+    const statistics = await owner.get('/api/internal/admin/statistics').expect(200);
+    expect(statistics.body.day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(statistics.body.byRoute).toEqual(expect.any(Array));
+    expect(statistics.body.byOrganization).toEqual(expect.any(Array));
+    await owner.get('/api/internal/admin/messages?status=FAILED&errorCode=no_route').expect(200);
     const margin = await owner.get('/api/internal/admin/margin').expect(200);
     expect(margin.body.items).toEqual([]);
     await owner.get('/api/internal/admin/messages?q=4915').expect(200);

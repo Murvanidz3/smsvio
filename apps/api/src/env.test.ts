@@ -28,7 +28,9 @@ describe('loadApiEnv', () => {
       EMAIL_MODE: 'disabled',
       ORG_SENDS_PER_SECOND: 20,
       AUTO_APPROVE_TEMPLATES: 'false',
+      SENT_DM_BASE_URL: 'https://api.sent.dm',
     });
+    expect(env.SENT_DM_API_KEY).toBeUndefined();
     expect(env.SENTRY_DSN).toBeUndefined();
     expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
   });
@@ -75,6 +77,30 @@ describe('loadApiEnv', () => {
       loadApiEnv({ ...base, GOOGLE_CLIENT_ID: 'client', GOOGLE_CLIENT_SECRET: 'secret' })
         .GOOGLE_CLIENT_ID,
     ).toBe('client');
+  });
+
+  it('reads Sent config and keeps the key out of validation errors', () => {
+    const key = 'sent-test-key';
+    const env = loadApiEnv({
+      ...base,
+      SENT_DM_API_KEY: key,
+      SENT_DM_BASE_URL: 'https://api.sent.dm',
+    });
+    expect(env.SENT_DM_API_KEY).toBe(key);
+    expect(env.SENT_DM_BASE_URL).toBe('https://api.sent.dm');
+    expect(loadApiEnv({ ...base, SENT_DM_API_KEY: '  ' }).SENT_DM_API_KEY).toBeUndefined();
+    expect(() =>
+      loadApiEnv({ ...base, SENT_DM_API_KEY: key, SENT_DM_BASE_URL: 'http://api.sent.dm' }),
+    ).toThrow(/SENT_DM_BASE_URL/);
+    let caught: unknown;
+    try {
+      loadApiEnv({ ...base, SENT_DM_API_KEY: key, SENT_DM_BASE_URL: 'not-a-url' });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/SENT_DM_BASE_URL/);
+    expect((caught as Error).message).not.toContain(key);
   });
 
   it('fails fast naming the missing variables', () => {

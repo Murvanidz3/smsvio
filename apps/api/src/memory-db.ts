@@ -1380,9 +1380,14 @@ function createMessagingMemory() {
     id: string;
     defaultDailySpendCapMicros: bigint;
     sharedSender: string | null;
+    sendingPaused: boolean;
   }
-  type SettingInput = Omit<SettingRow, 'createdAt' | 'updatedAt' | 'sharedSender'> & {
+  type SettingInput = Omit<
+    SettingRow,
+    'createdAt' | 'updatedAt' | 'sharedSender' | 'sendingPaused'
+  > & {
     sharedSender?: string | null;
+    sendingPaused?: boolean;
   };
 
   const providers = new Map<string, ProviderRow>();
@@ -1700,6 +1705,7 @@ function createMessagingMemory() {
             id: data.id,
             defaultDailySpendCapMicros: data.defaultDailySpendCapMicros,
             sharedSender: data.sharedSender ?? null,
+            sendingPaused: data.sendingPaused ?? false,
           };
           settings.set(row.id, row);
           return Promise.resolve(row);
@@ -1733,6 +1739,7 @@ function createMessagingMemory() {
             id: create.id,
             defaultDailySpendCapMicros: create.defaultDailySpendCapMicros,
             sharedSender: create.sharedSender ?? null,
+            sendingPaused: create.sendingPaused ?? false,
           };
           settings.set(row.id, row);
           return Promise.resolve(row);

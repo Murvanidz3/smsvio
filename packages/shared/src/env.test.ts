@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import {
   EnvValidationError,
+  SENT_DM_DEFAULT_BASE_URL,
   httpUrlSchema,
   logLevelSchema,
   nodeEnvSchema,
@@ -11,6 +12,7 @@ import {
   portSchema,
   postgresUrlSchema,
   redisUrlSchema,
+  sentDmEnvFields,
 } from './env.js';
 
 const schema = z.object({
@@ -78,6 +80,48 @@ describe('parseEnv', () => {
 
   it('reports root-level problems', () => {
     expect(() => parseEnv(z.string(), {})).toThrow(/\(root\): /);
+  });
+});
+
+describe('sentDmEnvFields', () => {
+  const schema = z.object(sentDmEnvFields);
+
+  it('defaults the base URL and leaves a blank key unset', () => {
+    expect(schema.parse({})).toEqual({
+      SENT_DM_API_KEY: undefined,
+      SENT_DM_BASE_URL: SENT_DM_DEFAULT_BASE_URL,
+      SENT_DM_WEBHOOK_SECRET: undefined,
+      SENT_DM_SANDBOX: false,
+    });
+    expect(schema.parse({ SENT_DM_API_KEY: '  ', SENT_DM_BASE_URL: '' }).SENT_DM_API_KEY).toBe(
+      undefined,
+    );
+    expect(schema.parse({ SENT_DM_API_KEY: '  sent-test-key  ' }).SENT_DM_API_KEY).toBe(
+      'sent-test-key',
+    );
+  });
+
+  it('accepts an https origin and rejects anything else', () => {
+    expect(schema.parse({ SENT_DM_BASE_URL: 'https://api.sent.dm' }).SENT_DM_BASE_URL).toBe(
+      'https://api.sent.dm',
+    );
+    expect(schema.safeParse({ SENT_DM_BASE_URL: 'http://api.sent.dm' }).success).toBe(false);
+    expect(schema.safeParse({ SENT_DM_BASE_URL: 'not-a-url' }).success).toBe(false);
+    expect(schema.safeParse({ SENT_DM_BASE_URL: 'https://api.sent.dm/v3' }).success).toBe(false);
+    expect(schema.safeParse({ SENT_DM_BASE_URL: 'https://user@api.sent.dm' }).success).toBe(false);
+    expect(schema.safeParse({ SENT_DM_API_KEY: 1 }).success).toBe(false);
+  });
+
+  it('reads the sandbox flag and the webhook secret', () => {
+    expect(schema.parse({ SENT_DM_SANDBOX: 'true' }).SENT_DM_SANDBOX).toBe(true);
+    expect(schema.parse({ SENT_DM_SANDBOX: 'false' }).SENT_DM_SANDBOX).toBe(false);
+    expect(schema.parse({ SENT_DM_SANDBOX: '' }).SENT_DM_SANDBOX).toBe(false);
+    expect(schema.safeParse({ SENT_DM_SANDBOX: 'yes' }).success).toBe(false);
+    expect(schema.parse({ SENT_DM_WEBHOOK_SECRET: ' ' }).SENT_DM_WEBHOOK_SECRET).toBe(undefined);
+    expect(
+      schema.parse({ SENT_DM_WEBHOOK_SECRET: 'whsec_dGVzdC1zZWNyZXQ=' }).SENT_DM_WEBHOOK_SECRET,
+    ).toBe('whsec_dGVzdC1zZWNyZXQ=');
+    expect(schema.safeParse({ SENT_DM_WEBHOOK_SECRET: 'whsec_not base64!' }).success).toBe(false);
   });
 });
 

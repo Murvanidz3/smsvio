@@ -222,6 +222,12 @@ export class SendService {
     if (organization === null) {
       throw sms('internal_error', 500);
     }
+    const platform = await this.prisma.platformSetting.findUnique({
+      where: { id: PLATFORM_SETTING_ID },
+    });
+    if (platform?.sendingPaused === true) {
+      throw sms('sending_paused', 503);
+    }
     if (organization.status === 'SUSPENDED') {
       throw sms('organization_suspended');
     }

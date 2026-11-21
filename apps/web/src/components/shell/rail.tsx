@@ -9,12 +9,14 @@ export function RailLink({
   current,
   icon: Icon,
   showLabel = false,
+  badge,
 }: {
   href: string;
   label: string;
   current: boolean;
   icon: LucideIcon;
   showLabel?: boolean;
+  badge?: number;
 }) {
   return (
     <Link
@@ -28,7 +30,14 @@ export function RailLink({
       )}
     >
       <Icon className="size-[22px] shrink-0" strokeWidth={1.7} aria-hidden />
-      <span className={showLabel ? undefined : 'vio-lbl'}>{label}</span>
+      <span className={showLabel ? undefined : 'vio-lbl'}>
+        {label}
+        {badge !== undefined && badge > 0 ? (
+          <span className="bg-primary text-primary-foreground ml-2 rounded-full px-1.5 text-xs">
+            {badge}
+          </span>
+        ) : null}
+      </span>
     </Link>
   );
 }

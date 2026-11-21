@@ -15,8 +15,13 @@ export const SMS_ERRORS = {
   rate_limited: 'Too many requests. Try again later.',
   organization_not_verified: 'Verify the organization before sending to other numbers.',
   organization_suspended: 'This organization is suspended.',
+  sending_paused: 'Sending is paused by the operator. Try again when it resumes.',
   no_route: 'No route is available for that destination.',
   carrier_rejected: 'The carrier rejected the message.',
+  provider_auth_failed:
+    'The SMS provider rejected our credentials. An operator has to fix the key.',
+  provider_balance_low: 'The SMS provider blocked the message because its account balance is low.',
+  provider_blocked: 'The SMS provider blocked the message before sending it.',
   absent_subscriber: 'The handset could not be reached.',
   blocked_by_carrier: 'The carrier blocked the message.',
   unknown_subscriber: 'The carrier does not recognise that number.',

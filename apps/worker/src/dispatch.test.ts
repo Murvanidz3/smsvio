@@ -70,6 +70,7 @@ function harness() {
     enabled: boolean;
     costMicros: bigint;
   }[] = [];
+  const gate = { sendingPaused: false };
   const providers: {
     id: string;
     code: string;
@@ -122,6 +123,9 @@ function harness() {
     },
     route: { findMany: () => Promise.resolve(routes) },
     provider: { findMany: () => Promise.resolve(providers) },
+    platformSetting: {
+      findUnique: () => Promise.resolve({ sendingPaused: gate.sendingPaused }),
+    },
     orgBalance: {
       findUnique: ({ where }: { where: { organizationId: string } }) =>
         Promise.resolve(balances.get(where.organizationId) ?? null),
@@ -225,7 +229,19 @@ function harness() {
     },
   };
 
-  return { db, redis, messages, events, ledger, balances, routes, providers, lists, missed };
+  return {
+    db,
+    redis,
+    messages,
+    events,
+    ledger,
+    balances,
+    routes,
+    providers,
+    lists,
+    missed,
+    gate,
+  };
 }
 
 function queueMessage(
@@ -577,5 +593,50 @@ describe('send dispatch', () => {
         process.env.API_INTERNAL_URL = previous;
       }
     }
+  });
+
+  it('leaves a queued message in place while sending is paused', async () => {
+    const world = harness();
+    world.gate.sendingPaused = true;
+    const id = queueMessage(world, '+12025550100', randomUUID());
+    await runSendTick(world.db as never, world.redis);
+    expect(world.messages.get(id)?.status).toBe('QUEUED');
+    expect(world.lists.get(SEND_QUEUE_KEY)).toContain(id);
+  });
+
+  it('applies a Sent BLOCKED receipt with its reason and ignores a later delivery', async () => {
+    const world = harness();
+    const providerId = randomUUID();
+    world.providers.push({
+      id: providerId,
+      code: 'mock',
+      type: 'MOCK',
+      status: 'ACTIVE',
+      maxTps: 1000,
+      callbackSecretHash: null,
+    });
+    world.routes.push({
+      id: randomUUID(),
+      countryIso2: 'DE',
+      mccmnc: null,
+      providerId,
+      priority: 100,
+      weight: 1,
+      enabled: true,
+      costMicros: 10_000n,
+    });
+    const now = Date.now();
+    const id = queueMessage(world, '+12025550100', randomUUID());
+    await runSendTick(world.db as never, world.redis, now);
+    const sent = world.messages.get(id);
+    expect(sent?.status).toBe('SENT');
+    const providerMessageId = sent?.providerMessageId ?? '';
+    await world.redis.zadd(RECEIPT_QUEUE_KEY, now + 1, `blocked_template:${providerMessageId}`);
+    await runSendTick(world.db as never, world.redis, now + 2);
+    expect(world.messages.get(id)?.status).toBe('BLOCKED');
+    expect(world.messages.get(id)?.errorCode).toBe('template_not_approved');
+    await world.redis.zadd(RECEIPT_QUEUE_KEY, now + 3, `delivered:${providerMessageId}`);
+    await runSendTick(world.db as never, world.redis, now + 4);
+    expect(world.messages.get(id)?.status).toBe('BLOCKED');
   });
 });

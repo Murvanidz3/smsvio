@@ -20,6 +20,7 @@ import { ExportsController } from './exports.controller.js';
 import { ProviderHooksController } from './hooks.controller.js';
 import { MessagesController } from './messages.controller.js';
 import { SendService } from './send.service.js';
+import { SentDmHooksController } from './sent-dm.controller.js';
 import { SenderService } from './senders.service.js';
 
 @Module({
@@ -30,6 +31,7 @@ import { SenderService } from './senders.service.js';
     SendersController,
     MessagesController,
     ProviderHooksController,
+    SentDmHooksController,
     ExportsController,
   ],
   providers: [

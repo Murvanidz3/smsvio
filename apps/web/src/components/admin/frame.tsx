@@ -4,8 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
   BadgeDollarSign,
+  BarChart3,
   Building2,
   ClipboardList,
+  Gauge,
   Menu,
   Route,
   ScrollText,
@@ -21,18 +23,21 @@ import { MenuPin, useMenuPin } from '@/components/shell/menu-pin';
 import { RailLink } from '@/components/shell/rail';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
+import { adminApi } from '@/lib/admin';
 import { accountApi } from '@/lib/api';
 
 const LINKS = [
-  { href: '/admin', label: 'Organizations', icon: Building2 },
-  { href: '/admin/providers', label: 'Providers', icon: Server },
-  { href: '/admin/routes', label: 'Routes', icon: Route },
-  { href: '/admin/rates', label: 'Rates', icon: BadgeDollarSign },
-  { href: '/admin/reviews', label: 'Reviews', icon: ClipboardList },
-  { href: '/admin/messages', label: 'Messages', icon: Search },
-  { href: '/admin/health', label: 'Health', icon: Activity },
-  { href: '/admin/margin', label: 'Margin', icon: BadgeDollarSign },
-  { href: '/admin/audit', label: 'Audit', icon: ScrollText },
+  { href: '/admin/operations', label: 'Operations', icon: Gauge, badge: false },
+  { href: '/admin/statistics', label: 'Statistics', icon: BarChart3, badge: false },
+  { href: '/admin', label: 'Organizations', icon: Building2, badge: false },
+  { href: '/admin/providers', label: 'Providers', icon: Server, badge: false },
+  { href: '/admin/routes', label: 'Routes', icon: Route, badge: false },
+  { href: '/admin/rates', label: 'Rates', icon: BadgeDollarSign, badge: false },
+  { href: '/admin/reviews', label: 'Reviews', icon: ClipboardList, badge: true },
+  { href: '/admin/messages', label: 'Messages', icon: Search, badge: false },
+  { href: '/admin/health', label: 'Health', icon: Activity, badge: false },
+  { href: '/admin/margin', label: 'Margin', icon: BadgeDollarSign, badge: false },
+  { href: '/admin/audit', label: 'Audit', icon: ScrollText, badge: false },
 ] as const;
 
 function current(pathname: string, href: string): boolean {
@@ -44,6 +49,16 @@ export function AdminFrame({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { pinned, togglePin } = useMenuPin();
   const session = useQuery({ queryKey: ['session'], queryFn: () => accountApi.session() });
+  const reviews = useQuery({
+    queryKey: ['admin-reviews'],
+    queryFn: () => adminApi.reviews(),
+    enabled: session.data?.user.isPlatformAdmin === true,
+  });
+  const pending =
+    (reviews.data?.verification.length ?? 0) +
+    (reviews.data?.useCases.length ?? 0) +
+    (reviews.data?.senders.length ?? 0) +
+    (reviews.data?.templates.length ?? 0);
   if (session.data !== undefined && !session.data.user.isPlatformAdmin) {
     return (
       <main className="mx-auto max-w-lg px-4 py-16">
@@ -88,6 +103,7 @@ export function AdminFrame({ children }: { children: ReactNode }) {
               label={link.label}
               icon={link.icon}
               current={current(pathname, link.href)}
+              badge={link.badge ? pending : undefined}
             />
           ))}
         </nav>
@@ -103,6 +119,7 @@ export function AdminFrame({ children }: { children: ReactNode }) {
               icon={link.icon}
               showLabel
               current={current(pathname, link.href)}
+              badge={link.badge ? pending : undefined}
             />
           ))}
         </nav>
@@ -139,6 +156,7 @@ export function AdminFrame({ children }: { children: ReactNode }) {
                   icon={link.icon}
                   showLabel
                   current={current(pathname, link.href)}
+                  badge={link.badge ? pending : undefined}
                 />
               ))}
             </nav>

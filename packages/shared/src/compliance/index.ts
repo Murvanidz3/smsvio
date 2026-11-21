@@ -12,5 +12,7 @@ export {
   complianceBusinessSchema,
   complianceDocumentSchema,
   reviewDecisionSchema,
+  sendingPauseSchema,
+  statisticsQuerySchema,
   useCaseSchema,
 } from './schemas.js';

@@ -8,6 +8,7 @@ import {
   portSchema,
   postgresUrlSchema,
   redisUrlSchema,
+  sentDmEnvFields,
 } from '@smsvio/shared';
 import { z } from 'zod';
 
@@ -69,6 +70,7 @@ export const apiEnvSchema = z
       (value) => (value === '' || value === undefined ? 'false' : value),
       z.enum(['true', 'false']),
     ),
+    ...sentDmEnvFields,
   })
   .superRefine((value, ctx) => {
     if ((value.SMTP_USER === undefined) !== (value.SMTP_PASSWORD === undefined)) {

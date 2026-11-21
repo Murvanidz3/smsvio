@@ -74,6 +74,7 @@ export default function ProvidersPage() {
             <option value="MOCK">Mock</option>
             <option value="SMPP">SMPP</option>
             <option value="HTTP">HTTP</option>
+            <option value="SENT_DM">Sent.dm</option>
           </select>
         </label>
         <label className="grid gap-1 text-sm">

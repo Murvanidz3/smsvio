@@ -6,6 +6,7 @@ import {
   complianceBusinessSchema,
   complianceDocumentSchema,
   reviewDecisionSchema,
+  sendingPauseSchema,
   useCaseSchema,
 } from './schemas.js';
 
@@ -45,6 +46,10 @@ describe('compliance schemas', () => {
     ).toEqual(['hours']);
     expect(reviewDecisionSchema.parse({ decision: 'reject' }).decision).toBe('reject');
     expect(adminMessageQuerySchema.parse({}).pageSize).toBe(25);
+    expect(adminMessageQuerySchema.parse({ status: 'FAILED', errorCode: 'no_route' }).status).toBe(
+      'FAILED',
+    );
+    expect(sendingPauseSchema.parse({ paused: true }).paused).toBe(true);
     expect(adminMessageQuerySchema.safeParse({ pageSize: 7 }).success).toBe(false);
   });
 });

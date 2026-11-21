@@ -562,6 +562,35 @@ and cards inverted. SMSVIO keeps its own name, mark, and wording.
   process sets `E2E_RELAX_RATE_LIMITS=1` with `NODE_ENV=test`, which multiplies auth limits by
   ten. Production does not set that flag.
 
+## Operator monitoring (2026-11-17)
+
+SMSOrca’s operator console is the reference for live control. The parts whose rules fit an
+SMS-only multi-tenant platform are now in the admin console. The rest stays on SMSOrca.
+
+- **Operations** shows today’s totals, each route’s delivery rate, messages submitted in the last
+  minute, the provider throughput limit, and sends that are still queued. **Pause sending** sets
+  `platform_settings.sendingPaused`. Accept then returns `sending_paused`, and the worker leaves
+  the send queue untouched. Receipts, expiry, and webhooks keep running. Resume is the same flag
+  set back to false. The change is audited as `platform.sending_paused`.
+- **Statistics** is one UTC day, grouped by route and by organization. Delivery rate is delivered
+  divided by messages that reached a final status.
+- **Health** lists failure counts by error code for the last 24 hours, and the sent messages still
+  open after five minutes.
+- **Messages** can be filtered by status and error code as well as number or id.
+- **Reviews** shows a count of waiting verification, use cases, senders, and templates.
+
+Not brought across, because the rule does not fit SMSVIO:
+
+- Short links. Click tracking is a separate product.
+- Deleting failed traffic with a per-route drop switch. A failed send stays in the log and the
+  hold is released.
+- Customers binding by SMPP, and showing those passwords in the browser. Customers use API keys.
+  Upstream SMPP credentials stay encrypted on the provider.
+- Signing in as the customer from the operator console.
+- Moving an in-flight campaign onto another route. SMSVIO has messages, not campaigns.
+- A forced sender pool on a route. That waits until a live carrier requires it. No sender list
+  was invented.
+
 ## Marketing site (2026-11-17)
 
 The public page replaces the placeholder. Step 1 is the header, hero, footer, and
@@ -586,3 +615,7 @@ The public page replaces the placeholder. Step 1 is the header, hero, footer, an
 - The public list is cached for 10 minutes and limited to 120 requests a minute per IP. The
   marketing pages stay server-rendered because the existing nonce content-security policy reads
   the request.
+
+## Sent.dm provider (2026-11-21)
+
+- Sent.dm `BLOCKED`, `FILTERED`, and `CANCELLED` messages are not refunded to customers (Luka, 2026-11-21).

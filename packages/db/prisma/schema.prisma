@@ -227,6 +227,8 @@ enum MessageStatus {
   EXPIRED
   FAILED
   REJECTED
+  /// The provider gated the send before delivery (Sent.dm: low balance, quota, template, sender).
+  BLOCKED
 }
 
 model Country {
@@ -302,6 +304,12 @@ model Message {
   errorCode         String?
   providerId        String?          @db.Uuid
   providerMessageId String?
+  /// Provider request id for support (Sent.dm `meta.request_id`).
+  providerRequestId String?
+  /// Provider-side template id (Sent.dm template UUID). templateId is the SMSVIO template.
+  providerTemplateId String?
+  /// Channel the provider used, for example `sms`.
+  channel           String?
   routeId           String?          @db.Uuid
   priceMicros       BigInt?
   costMicros        BigInt?
@@ -357,6 +365,7 @@ enum ProviderType {
   MOCK
   SMPP
   HTTP
+  SENT_DM
 }
 
 enum ProviderStatus {
@@ -579,10 +588,12 @@ model DailyUsage {
 
 /// Single row id `platform`. Organizations with a null spend cap inherit this value.
 /// sharedSender is null until the seed applies the default, and empty when an operator hides it.
+/// sendingPaused stops new accepts and new submits. Receipts and expiry keep running.
 model PlatformSetting {
   id                         String   @id
   defaultDailySpendCapMicros BigInt
   sharedSender               String?
+  sendingPaused              Boolean  @default(false)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 

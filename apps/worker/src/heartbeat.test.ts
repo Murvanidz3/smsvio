@@ -86,6 +86,9 @@ describe('HeartbeatService in the worker module', () => {
         },
         ledgerEntry: { findMany: () => Promise.resolve([]) },
         message: { findMany: () => Promise.resolve([]) },
+        platformSetting: {
+          findUnique: () => Promise.resolve({ sendingPaused: false }),
+        },
         organization: { findMany: () => Promise.resolve([]) },
         billingProfile: { findMany: () => Promise.resolve([]) },
         dailyUsage: { upsert: () => Promise.resolve({}) },

@@ -87,6 +87,10 @@ services:
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_FROM: ${SMTP_FROM:-}
+      SENT_DM_API_KEY: ${SENT_DM_API_KEY:-}
+      SENT_DM_BASE_URL: ${SENT_DM_BASE_URL:-https://api.sent.dm}
+      SENT_DM_WEBHOOK_SECRET: ${SENT_DM_WEBHOOK_SECRET:-}
+      SENT_DM_SANDBOX: ${SENT_DM_SANDBOX:-false}
     healthcheck:
       test:
         - CMD
@@ -120,6 +124,10 @@ services:
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_FROM: ${SMTP_FROM:-}
+      SENT_DM_API_KEY: ${SENT_DM_API_KEY:-}
+      SENT_DM_BASE_URL: ${SENT_DM_BASE_URL:-https://api.sent.dm}
+      SENT_DM_WEBHOOK_SECRET: ${SENT_DM_WEBHOOK_SECRET:-}
+      SENT_DM_SANDBOX: ${SENT_DM_SANDBOX:-false}
     healthcheck:
       test: ['CMD', 'node', 'dist/healthcheck.js']
       interval: 10s

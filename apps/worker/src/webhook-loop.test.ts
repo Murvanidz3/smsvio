@@ -29,6 +29,10 @@ const env: WorkerEnv = {
   SMTP_USER: undefined,
   SMTP_PASSWORD: undefined,
   SMTP_FROM: undefined,
+  SENT_DM_API_KEY: undefined,
+  SENT_DM_BASE_URL: 'https://api.sent.dm',
+  SENT_DM_WEBHOOK_SECRET: undefined,
+  SENT_DM_SANDBOX: false,
 };
 
 describe('webhook loop', () => {

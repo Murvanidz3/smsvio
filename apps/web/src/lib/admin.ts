@@ -66,6 +66,16 @@ export interface AdminRate {
   price: Money | null;
 }
 
+export interface TrafficTally {
+  total: number;
+  queued: number;
+  sending: number;
+  sent: number;
+  delivered: number;
+  failed: number;
+  deliveryRate: number | null;
+}
+
 export interface RatePreview {
   ok: boolean;
   rows?: { line: number; countryIso2: string; mccmnc: string | null; price: Money }[];
@@ -178,15 +188,59 @@ export const adminApi = {
         webhookDelay: number;
       };
       receiptLag: number;
+      errorGroups: { errorCode: string; count: number }[];
+      stuck: { id: string; to: string; sentAt: string | null }[];
     }>('/api/internal/admin/health'),
+  operations: () =>
+    api<{
+      paused: boolean;
+      today: TrafficTally;
+      queues: { send: number; delayed: number; receipts: number };
+      routes: (TrafficTally & {
+        id: string;
+        countryIso2: string;
+        mccmnc: string | null;
+        providerCode: string;
+        providerType: string;
+        enabled: boolean;
+        maxTps: number;
+        lastMinute: number;
+      })[];
+      open: {
+        id: string;
+        organizationName: string;
+        to: string;
+        status: string;
+        countryIso2: string | null;
+      }[];
+    }>('/api/internal/admin/operations'),
+  statistics: (day: string) =>
+    api<{
+      day: string;
+      byRoute: (TrafficTally & { routeId: string; countryIso2: string; providerCode: string })[];
+      byOrganization: (TrafficTally & { organizationId: string; name: string })[];
+    }>(`/api/internal/admin/statistics?day=${encodeURIComponent(day)}`),
+  setSendingPaused: (paused: boolean) =>
+    api<{ paused: boolean; message: string }>('/api/internal/admin/sending', {
+      method: 'POST',
+      body: { paused },
+    }),
   margin: () =>
     api<{
       items: { country: string; providerId: string; revenue: Money; cost: Money; margin: Money }[];
     }>('/api/internal/admin/margin'),
   messages: (query: string) =>
-    api<{ total: number; items: { id: string; to: string; status: string; direction: string }[] }>(
-      `/api/internal/admin/messages${query}`,
-    ),
+    api<{
+      total: number;
+      items: {
+        id: string;
+        to: string;
+        status: string;
+        direction: string;
+        errorCode: string | null;
+        countryIso2: string | null;
+      }[];
+    }>(`/api/internal/admin/messages${query}`),
   audit: (query: string) =>
     api<{ total: number; items: { id: string; action: string; createdAt: string }[] }>(
       `/api/internal/admin/audit${query}`,

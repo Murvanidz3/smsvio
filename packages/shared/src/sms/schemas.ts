@@ -82,6 +82,7 @@ export const messageListSchema = z.object({
       'EXPIRED',
       'FAILED',
       'REJECTED',
+      'BLOCKED',
     ])
     .optional(),
   direction: z.enum(['OUTBOUND', 'INBOUND']).optional(),

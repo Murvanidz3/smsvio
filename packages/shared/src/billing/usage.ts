@@ -7,8 +7,8 @@ export const USAGE_REFRESH_MS = 15 * 60 * 1000;
 export const MIN_TOP_UP_MICROS = 10n * MICROS_PER_USD;
 
 const ACCEPTED = new Set(['SENT', 'DELIVERED', 'UNDELIVERED', 'EXPIRED']);
-const FAILED = new Set(['FAILED', 'REJECTED', 'UNDELIVERED']);
-const FINAL = new Set(['DELIVERED', 'UNDELIVERED', 'EXPIRED', 'FAILED', 'REJECTED']);
+const FAILED = new Set(['FAILED', 'REJECTED', 'UNDELIVERED', 'BLOCKED']);
+const FINAL = new Set(['DELIVERED', 'UNDELIVERED', 'EXPIRED', 'FAILED', 'REJECTED', 'BLOCKED']);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

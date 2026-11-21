@@ -30,7 +30,7 @@ export const markupSchema = z.number().int().min(0).max(MAX_MARKUP_PERCENT);
 
 export const createProviderSchema = z.object({
   code: providerCodeSchema,
-  type: z.enum(['MOCK', 'SMPP', 'HTTP']),
+  type: z.enum(['MOCK', 'SMPP', 'HTTP', 'SENT_DM']),
   markupPercent: markupSchema,
   maxTps: z.number().int().min(1).max(10_000),
   config: z.string().trim().max(8000).optional(),

@@ -1,6 +1,11 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { idParamSchema } from '@smsvio/shared';
-import { adminMessageQuerySchema, reviewDecisionSchema } from '@smsvio/shared/compliance';
+import {
+  adminMessageQuerySchema,
+  reviewDecisionSchema,
+  sendingPauseSchema,
+  statisticsQuerySchema,
+} from '@smsvio/shared/compliance';
 import type { FastifyRequest } from 'fastify';
 
 import type { AuthState } from '../accounts/support.js';
@@ -58,6 +63,28 @@ export class OperatorController {
   @Get('health')
   health(@Req() request: FastifyRequest) {
     return this.operator.health(current(request));
+  }
+
+  @Get('operations')
+  operations(@Req() request: FastifyRequest) {
+    return this.operator.operations(current(request));
+  }
+
+  @Get('statistics')
+  statistics(@Req() request: FastifyRequest, @Query() query: unknown) {
+    return this.operator.statistics(
+      current(request),
+      parseInput(statisticsQuerySchema, firstQueryValues(query)).day,
+    );
+  }
+
+  @Post('sending')
+  sending(@Req() request: FastifyRequest, @Body() body: unknown) {
+    return this.operator.setSendingPaused(
+      current(request),
+      parseInput(sendingPauseSchema, body).paused,
+      clientInfo(request),
+    );
   }
 
   @Get('margin')

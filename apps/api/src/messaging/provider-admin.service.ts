@@ -44,7 +44,7 @@ export class ProviderAdminService {
     state: AuthState,
     input: {
       code: string;
-      type: 'MOCK' | 'SMPP' | 'HTTP';
+      type: 'MOCK' | 'SMPP' | 'HTTP' | 'SENT_DM';
       markupPercent: number;
       maxTps: number;
       config?: string;

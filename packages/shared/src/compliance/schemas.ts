@@ -40,10 +40,35 @@ export const reviewDecisionSchema = z.object({
 
 export const adminMessageQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
+  status: z
+    .enum([
+      'QUEUED',
+      'SENDING',
+      'SENT',
+      'DELIVERED',
+      'UNDELIVERED',
+      'EXPIRED',
+      'FAILED',
+      'REJECTED',
+    ])
+    .optional(),
+  organizationId: z.uuid().optional(),
+  errorCode: z.string().trim().min(1).max(64).optional(),
   page: z.coerce.number().int().min(1).max(10_000).default(1),
   pageSize: z.coerce
     .number()
     .int()
     .refine((value) => [10, 25, 50, 100].includes(value))
     .default(25),
+});
+
+export const statisticsQuerySchema = z.object({
+  day: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+});
+
+export const sendingPauseSchema = z.object({
+  paused: z.boolean(),
 });

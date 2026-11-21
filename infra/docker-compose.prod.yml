@@ -106,6 +106,10 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      SENT_DM_API_KEY: ${SENT_DM_API_KEY:-}
+      SENT_DM_BASE_URL: ${SENT_DM_BASE_URL:-https://api.sent.dm}
+      SENT_DM_WEBHOOK_SECRET: ${SENT_DM_WEBHOOK_SECRET:-}
+      SENT_DM_SANDBOX: ${SENT_DM_SANDBOX:-false}
     tmpfs:
       - /tmp
     mem_limit: 512m
@@ -148,6 +152,10 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      SENT_DM_API_KEY: ${SENT_DM_API_KEY:-}
+      SENT_DM_BASE_URL: ${SENT_DM_BASE_URL:-https://api.sent.dm}
+      SENT_DM_WEBHOOK_SECRET: ${SENT_DM_WEBHOOK_SECRET:-}
+      SENT_DM_SANDBOX: ${SENT_DM_SANDBOX:-false}
     tmpfs:
       - /tmp
     mem_limit: 512m

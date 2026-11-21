@@ -38,15 +38,20 @@ export function createFakeDependencies() {
 export type FakeDependencies = ReturnType<typeof createFakeDependencies>;
 
 /** Boots the real application module with Postgres and Redis replaced by fakes. */
-export async function createTestApp(deps: FakeDependencies): Promise<NestFastifyApplication> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(testEnv)] })
+export async function createTestApp(
+  deps: FakeDependencies,
+  env: ApiEnv = testEnv,
+): Promise<NestFastifyApplication> {
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule.forRoot(env)] })
     .overrideProvider(PRISMA)
     .useValue(deps.prisma)
     .overrideProvider(REDIS)
     .useValue(deps.redis)
     .compile();
   const app = await configureApp(
-    moduleRef.createNestApplication<NestFastifyApplication>(createFastifyAdapter(testEnv)),
+    moduleRef.createNestApplication<NestFastifyApplication>(createFastifyAdapter(env), {
+      rawBody: true,
+    }),
   );
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

@@ -6,6 +6,7 @@ import {
   parseEnv,
   postgresUrlSchema,
   redisUrlSchema,
+  sentDmEnvFields,
 } from '@smsvio/shared';
 import { z } from 'zod';
 
@@ -28,6 +29,7 @@ export const workerEnvSchema = z.object({
   SMTP_USER: optionalEnv(z.string().min(1)),
   SMTP_PASSWORD: optionalEnv(z.string().min(1)),
   SMTP_FROM: optionalEnv(z.string().trim().min(3).max(200)),
+  ...sentDmEnvFields,
   /** When set, simulated delivery receipts are posted to the provider hook on this origin. */
   API_INTERNAL_URL: optionalEnv(
     z.string().refine((value) => {

@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from '@smsvio/db';
 import { applyInbound, attributeInbound, publishCustomerEvent } from '@smsvio/server';
-import { orderedRoutes } from '@smsvio/shared/billing';
+import { PLATFORM_SETTING_ID, orderedRoutes } from '@smsvio/shared/billing';
 import { MOCK_CALLBACK_SECRET, type ProviderSendResult } from '@smsvio/shared/provider';
 
 import { drainCarrier, sendThroughProvider } from './carrier.js';
@@ -12,6 +12,7 @@ import {
   SEND_DELAY_KEY,
   SEND_QUEUE_KEY,
   receiptMember,
+  receiptOutcome,
   retryDelayMs,
   sendLockKey,
   transitionMessage,
@@ -105,6 +106,13 @@ async function promote(redis: SendRedis, now: number): Promise<void> {
 }
 
 async function sendQueued(prisma: PrismaClient, redis: SendRedis, now: number): Promise<void> {
+  const gate = await prisma.platformSetting.findUnique({
+    where: { id: PLATFORM_SETTING_ID },
+    select: { sendingPaused: true },
+  });
+  if (gate?.sendingPaused === true) {
+    return;
+  }
   const ids: string[] = [];
   for (let count = 0; count < SENDS_PER_TICK; count += 1) {
     const id = await redis.rpop(SEND_QUEUE_KEY);
@@ -187,6 +195,8 @@ async function dispatchMessage(
 
   let failed = [...message.failedRouteIds];
   let attempt = message.attempt;
+  /** A provider-specific reason (bad key, bad number, template) replaces the generic no_route. */
+  let reason: string | null = null;
   for (const route of candidates) {
     const provider = providerById.get(route.providerId);
     if (provider === undefined) {
@@ -209,6 +219,9 @@ async function dispatchMessage(
         body: message.body,
         encoding: message.encoding,
         segments: message.segments,
+        messageId: message.id,
+        templateId: message.templateId,
+        variables: templateVariables(message.templateVars),
       },
       billable: message.billable,
       encryptionKey: process.env.APP_ENCRYPTION_KEY,
@@ -216,6 +229,9 @@ async function dispatchMessage(
     if (result.status === 'accepted') {
       await markSent(prisma, redis, message, route.id, provider.id, route.costMicros, result, now);
       return;
+    }
+    if (result.errorCode !== 'carrier_rejected') {
+      reason = result.errorCode;
     }
     if (result.status === 'temporary_failure' && attempt + 1 < SEND_ATTEMPTS_PER_ROUTE) {
       attempt += 1;
@@ -230,7 +246,21 @@ async function dispatchMessage(
       data: { failedRouteIds: failed, attempt: 0 },
     });
   }
-  await markFailed(prisma, redis, message, 'no_route');
+  await markFailed(prisma, redis, message, reason ?? 'no_route');
+}
+
+/** Template variables as strings. Anything that is not a flat string map is dropped. */
+function templateVariables(value: unknown): Record<string, string> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  const variables: Record<string, string> = {};
+  for (const [name, item] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof item === 'string') {
+      variables[name] = item;
+    }
+  }
+  return variables;
 }
 
 async function markSent(
@@ -256,6 +286,9 @@ async function markSent(
         status: 'SENT',
         providerId,
         providerMessageId: result.providerMessageId,
+        providerRequestId: result.providerRequestId ?? null,
+        providerTemplateId: result.providerTemplateId ?? null,
+        channel: result.channel ?? null,
         routeId,
         costMicros: cost,
         sentAt: new Date(now),
@@ -379,11 +412,12 @@ async function applyReceipts(prisma: PrismaClient, redis: SendRedis, now: number
     if (split <= 0) {
       continue;
     }
-    const status = member.slice(0, split).toUpperCase();
+    const outcome = receiptOutcome(member.slice(0, split).toLowerCase());
     const id = member.slice(split + 1);
-    if (status !== 'DELIVERED' && status !== 'UNDELIVERED' && status !== 'EXPIRED') {
+    if (outcome === null) {
       continue;
     }
+    const status = outcome.status;
     const byProvider = await prisma.message.findFirst({ where: { providerMessageId: id } });
     const message =
       byProvider ?? (UUID.test(id) ? await prisma.message.findUnique({ where: { id } }) : null);
@@ -398,9 +432,9 @@ async function applyReceipts(prisma: PrismaClient, redis: SendRedis, now: number
       where: { id: message.id },
       data: {
         status: next,
-        ...(next === 'DELIVERED' ? { deliveredAt: new Date(now), errorCode: null } : {}),
-        ...(next === 'EXPIRED' ? { errorCode: 'expired' } : {}),
-        ...(next === 'UNDELIVERED' ? { errorCode: 'carrier_rejected' } : {}),
+        errorCode: outcome.errorCode,
+        ...(next === 'DELIVERED' ? { deliveredAt: new Date(now) } : {}),
+        ...(next === 'BLOCKED' ? { failedAt: new Date(now) } : {}),
       },
     });
     await prisma.messageEvent.create({
@@ -448,6 +482,9 @@ function receiptEvent(status: string): string {
   }
   if (status === 'UNDELIVERED') {
     return 'message.undelivered';
+  }
+  if (status === 'BLOCKED') {
+    return 'message.failed';
   }
   return 'message.expired';
 }

@@ -140,6 +140,18 @@ describe('send service', () => {
     const after = await db.orgBalance.findUnique({ where: { organizationId: organization.id } });
     expect(after?.heldMicros).toBe(30_000n);
 
+    await db.platformSetting.update({
+      where: { id: 'platform' },
+      data: { sendingPaused: true },
+    });
+    await expect(send.send(auth, { ...body, clientRef: 'paused' })).rejects.toMatchObject({
+      code: 'sending_paused',
+    });
+    await db.platformSetting.update({
+      where: { id: 'platform' },
+      data: { sendingPaused: false },
+    });
+
     await db.contact.create({
       data: {
         organizationId: organization.id,
